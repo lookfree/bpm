@@ -1,0 +1,13 @@
+# Database dumps (potentially sensitive — add explicitly if needed)
+*.sql
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
+
+# Temporary
+*.swp
+*~
