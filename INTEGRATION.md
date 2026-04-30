@@ -1,13 +1,17 @@
 # BPM 模块集成方法
 
 本仓库交付的是 jeecg-boot 的一个独立 Maven 子模块 `jeecg-module-bpm`，
-不包含 jeecg-boot 主体源码。集成方需自行准备 jeecg-boot v0.1.8
-（或对应版本）源码，然后按以下步骤接入。
+不包含 jeecg-boot 主体源码。集成方需自行准备 **jeecg-boot v3.5.5**
+源码，然后按以下步骤接入。
+
+> 版本核实方法：根据 manage.iimt.org.cn 部署使用的 Spring Boot 2.7.10 +
+> MyBatis-Plus 3.5.3.1 + Shiro 1.12.0 + JWT 3.11.0 + Knife4j 3.0.3 +
+> FastJSON 1.2.83 + Aliyun OSS 3.11.2 等版本组合，比对 jeecg-boot 各 tag 的
+> 顶层 `pom.xml`，**v3.5.5** 唯一全匹配。
 
 ## 1. 准备 jeecg-boot
-git clone https://github.com/jeecgboot/jeecg-boot.git
+git clone --depth 1 -b v3.5.5 https://github.com/jeecgboot/jeecg-boot.git
 cd jeecg-boot
-git checkout v3.6.3   # 与 jeecgboot-vue3 v0.1.8 对应的服务端 tag，需现场确认（C1）
 
 ## 2. 把本模块放入
 将本仓库 `jeecg-module-bpm/` 整目录拷贝到 jeecg-boot 根目录：

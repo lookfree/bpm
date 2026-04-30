@@ -6,8 +6,10 @@
 | 日期 | 2026-04-30 |
 | 状态 | 待评审 |
 | 来源需求 | `流程配置模块需求.pages` / `流程配置模块需求.docx` |
-| 集成目标平台 | jeecg-boot (Spring Boot 2.7.10 / Vue 3.3.4) |
+| 集成目标平台 | **jeecg-boot v3.5.5**（Spring Boot 2.7.10 / Vue 3.3.4）|
 | 部署参考 | https://manage.iimt.org.cn/dashboard/analysis（"集萃智造中台"，jeecgboot-vue3 v0.1.8）|
+| 版本核实方法 | 比对 root pom.xml 版本组合（Spring Boot 2.7.10 + MyBatis-Plus 3.5.3.1 + Shiro 1.12.0 + JWT 3.11.0 + Knife4j 3.0.3 + FastJSON 1.2.83 + Aliyun OSS 3.11.2），唯一全匹配 v3.5.5 |
+| 模块部署形态 | **独立 Maven 工程 + SPI 适配器**（不嵌入 jeecg-boot reactor，方便不同版本/不同系统集成）|
 | 后端 API 网关前缀 | `/iimt`（如 `https://manage.iimt.org.cn/iimt/sys/login`） |
 | 前端框架 | jeecgboot-vue3（VBen Admin + Ant Design Vue 3.x + Vite + VxeTable） |
 | 微前端 | Qiankun **已启用**（`VITE_GLOB_APP_OPEN_QIANKUN=true`），可选作为子应用接入 |
@@ -60,20 +62,36 @@
 
 ## 3. 总体架构
 
-### 3.1 模块部署形态
-作为 jeecg-boot 的一个 Maven 子模块：
+### 3.1 模块部署形态：**独立 Maven 工程 + SPI 适配器**
+
+> **关键决策（2026-04-30 修订）**：BPM 不内嵌为 jeecg-boot 的 Maven 子模块，而是作为一个**独立 Maven 工程**单独发布 jar，通过 SPI 接口与具体宿主系统解耦。这样同一份 bpm-biz 可以在不同 jeecg 版本（v3.5.x / v3.6.x / v3.7.x）甚至非 jeecg 系统中复用——只需更换适配器实现。
 
 ```
-jeecg-boot/
-├── jeecg-module-system/         # 已有
-├── jeecg-module-online/         # 已有 (Online Form)
-├── jeecg-module-bpm/            # ★ 新增
-│   ├── jeecg-module-bpm-api/    # DTO / Feign 接口
-│   └── jeecg-module-bpm-biz/    # 实现 + Controller
-└── jeecg-boot-module-system/    # 主启动模块（引入 bpm-biz）
+jeecg-module-bpm/                       # 独立 Maven 工程，独立版本号
+├── pom.xml                             # parent: spring-boot-starter-parent 2.7.10（不依赖 jeecg-boot-parent）
+├── jeecg-module-bpm-api/               # DTO / 异常 / 公共契约（纯 POJO）
+├── jeecg-module-bpm-spi/               # SPI 接口：BPM 需要外部提供的能力
+│                                         (BpmUserContext / BpmOrgService /
+│                                          BpmFormService / BpmNotificationSender)
+├── jeecg-module-bpm-biz/               # 引擎 + Controller 实现，依赖 api + spi + Flowable
+│                                         不直接依赖 jeecg
+└── jeecg-module-bpm-adapter-jeecg/     # SPI 的 jeecg 实现（读 sys_user/sys_depart、调 JwtUtil 等）
+                                          集成 jeecg-boot v3.5.x 时引入这个
 ```
 
-**依赖**：`jeecg-module-bpm-biz` 依赖 `jeecg-module-system-api`、`jeecg-module-online-api`，反向不依赖。
+**依赖方向（强制）：**
+- `bpm-api` → 无依赖（纯 POJO）
+- `bpm-spi` → `bpm-api`
+- `bpm-biz` → `bpm-api`、`bpm-spi`、Flowable、Spring Boot starter；**禁止依赖任何 `jeecg-*` artifact**
+- `bpm-adapter-jeecg` → `bpm-spi`、`jeecg-boot-base-core`、`jeecg-system-local-api`
+
+**集成场景：**
+
+| 宿主系统 | 集成方式 |
+|---|---|
+| jeecg-boot v3.5.5（manage.iimt.org.cn） | 在 `jeecg-boot-module-system/pom.xml` 加 `bpm-biz` + `bpm-adapter-jeecg` 两个依赖 |
+| jeecg-boot v3.6.x / v3.7.x | 复用 v3.5.5 适配器；如 sys_* 表结构差异大则做 `bpm-adapter-jeecg-v36` 等并存 |
+| 非 jeecg 系统 | 自行实现 `bpm-spi` 4 个接口为 `bpm-adapter-mysys`，加 `bpm-biz` + 自建适配器即可 |
 
 ### 3.2 分层
 ```
@@ -103,7 +121,50 @@ jeecg-boot/
 └──────────────────────────────────────────────┘
 ```
 
-### 3.3 关键技术选型
+### 3.3 SPI 接口清单（`bpm-spi`）
+
+`bpm-biz` 仅依赖以下接口；`bpm-adapter-jeecg` 在 jeecg-boot v3.5.5 环境下提供具体实现；其它宿主系统可自行实现适配层。
+
+```java
+public interface BpmUserContext {
+    /** 当前 HTTP/JWT 上下文中的用户 id，无登录态时返回 null */
+    Long currentUserId();
+    String currentUsername();
+    Long currentDeptId();          // 主部门
+    Set<String> currentRoleCodes();
+}
+
+public interface BpmOrgService {
+    /** 按部门 id 取部门负责人 user id；找不到返回空 */
+    List<Long> findDeptLeaders(Long deptId);
+    /** 上级部门负责人 */
+    List<Long> findUpperDeptLeaders(Long deptId);
+    /** 按角色 code 反查用户 id 列表 */
+    List<Long> findUsersByRole(String roleCode);
+    /** 按岗位 code 反查 */
+    List<Long> findUsersByPosition(String positionCode);
+    /** 用户是否存在 / 启用 */
+    boolean isUserActive(Long userId);
+}
+
+public interface BpmFormService {
+    /** 加载表单 schema（字段定义）。adapter 把 jeecg onl_cgform_head/field 翻译成统一结构 */
+    BpmFormSchema loadFormSchema(String formId);
+    /** 保存一次表单提交，返回业务键（business_key），用于关联 act_ru_execution */
+    String saveFormSubmission(String formId, Map<String,Object> data);
+    /** 加载已有表单数据（审批节点回显） */
+    Map<String,Object> loadFormData(String formId, String businessKey);
+}
+
+public interface BpmNotificationSender {
+    /** channel ∈ {DING, EMAIL, INTERNAL}；超时提醒、待办通知 */
+    void send(Long toUserId, String channel, String templateCode, Map<String,Object> vars);
+}
+```
+
+外加非接口的"配置贡献"机制：`BpmShiroPathContributor` 暴露需要 jwt 拦截的路径前缀（`/bpm/v1/**`），由宿主 `ShiroConfig` 在初始化时读取并注册——避免要求用户改 jeecg 源码。
+
+### 3.4 关键技术选型
 
 | 关注点 | 选型 | 备选 | 理由 |
 |---|---|---|---|
@@ -394,18 +455,23 @@ YAGNI：不做独立的引擎实例或独立 schema。
 
 ## 13. 与既有 jeecg 模块的耦合点清单
 
-| jeecg 模块/表 | 用法 | 风险 |
-|---|---|---|
-| `sys_user` / `sys_user_role` / `sys_user_depart` | 节点人员解析 | 低 — 只读 |
-| `sys_role` | 角色策略 | 低 |
-| `sys_depart` | 部门主管 / 上下级解析 | 中 — 依赖 `parent_id` 树结构正确 |
-| `sys_position` | 岗位策略 | 低 |
-| `onl_cgform_head` / `onl_cgform_field` | 表单元数据复用 | 中 — 字段类型支持需要梳理一遍（子表、附件、计算字段都要测） |
-| `sys_dict` | 节点超时动作等下拉 | 低 |
-| `sys_permission` | 模块菜单与权限点注入 | 低 |
-| `sys_data_log` | 流程定义变更审计 | 低 |
-| Shiro 配置 | `/bpm/v1/**` 路径放行规则 | 低 |
-| Quartz | 超时检查、版本归档 | 低 |
+> **重要：** 所有耦合点都被 `bpm-adapter-jeecg` 子模块封装，`bpm-biz` 通过 `bpm-spi` 接口调用，不直接依赖任何 `jeecg-*` artifact。下表"调用入口"指 SPI 接口；"jeecg 实现"指 adapter 内的具体落地。
+
+| jeecg 模块/表 | 用法 | SPI 接口 | adapter-jeecg 实现要点 | 风险 |
+|---|---|---|---|---|
+| `sys_user` / `sys_user_role` / `sys_user_depart` | 节点人员解析 | `BpmOrgService.findUsersByRole()` 等 | 直连 jeecg mapper | 低 — 只读 |
+| `sys_role` | 角色策略 | `BpmOrgService.findRoleCode()` | 同上 | 低 |
+| `sys_depart` | 部门主管 / 上下级解析 | `BpmOrgService.findDeptLeader(deptId)` / `findUpperDept()` | 沿 `parent_id` 上溯 | 中 — 依赖 tree 正确 |
+| `sys_position` | 岗位策略 | `BpmOrgService.findUsersByPosition()` | 同上 | 低 |
+| `onl_cgform_head` / `onl_cgform_field` | 表单元数据复用 | `BpmFormService.loadFormSchema(formId)` | 走 jeecg Online Form 服务 | 中 — 字段类型覆盖需梳理 |
+| Shiro JWT 上下文 | 当前用户 / 鉴权 | `BpmUserContext.currentUserId()` | 调 `JwtUtil.getUserNameByToken()` | 低 |
+| 通知（钉钉/邮件/RabbitMQ） | 节点超时提醒等 | `BpmNotificationSender.send()` | 调 jeecg 现有消息中心 | 低 |
+| `sys_dict` | 下拉数据 | `BpmDictService.lookup(code)` | 直连 sys_dict | 低 |
+| `sys_permission` | 模块菜单与权限点注入 | 无 SPI——通过 SQL 脚本或后台手工 | adapter 提供初始化 SQL | 低 |
+| `sys_data_log` | 流程定义变更审计 | 无 SPI——bpm-biz 自己 log，adapter 转发到 sys_data_log | 可选 | 低 |
+| Shiro 路径放行 | `/bpm/v1/**` 路径放行规则 | 无 SPI——adapter 提供 `BpmShiroPathProvider` 给主壳读取 | 主壳 `ShiroConfig` 注入 | 低 |
+| Quartz | 超时检查、版本归档 | 无 SPI——bpm-biz 用 Spring `@Scheduled` 或 Quartz starter，与 jeecg Quartz 共存 | 低 | 低 |
+| Aliyun OSS / 附件 | 表单附件 | `BpmFormService` 透传 attachment URL，不直接管文件 | 由 jeecg 处理 | 低 |
 | RabbitMQ | 通知 | 低 |
 | OSS | 附件 | 低 |
 

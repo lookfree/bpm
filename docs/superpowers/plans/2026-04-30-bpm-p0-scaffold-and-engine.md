@@ -1,223 +1,129 @@
-# BPM P0 — 模块脚手架 + Flowable 引擎集成 实施计划
+# BPM P0 — 独立模块脚手架 + Flowable 引擎集成 实施计划
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 在 jeecg-boot v0.1.8 工程中新增 `jeecg-module-bpm` 多模块骨架，集成 Flowable 6.8.0 工作流引擎与现有 Shiro+JWT 鉴权链路打通，能在 manage.iimt.org.cn 兼容的部署形态下跑通"部署 hello-world BPMN → 启动实例 → 完成 UserTask"完整链路。
+**Goal:** 交付一个**独立可发布**的 Maven 工程 `jeecg-module-bpm`，集成 Flowable 6.8.0 工作流引擎；模块本身不依赖 `jeecg-*` artifact，通过 SPI（P1 起补齐）解耦宿主系统；P0 在 jeecg-boot v3.5.5 真实环境中跑通"添加依赖 → 主壳启动 → `/bpm/v1/healthz` 通 → hello-world BPMN 部署+启动+完成"完整链路。
 
-**Architecture:** Maven 父子模块（`jeecg-module-bpm-api` / `jeecg-module-bpm-biz`），Flowable 与 jeecg 共用同一个 MySQL datasource，引擎通过 `flowable-spring-boot-starter` 自动装配，`/bpm/v1/**` 路径在 Shiro `ShiroConfig` 中按 jeecg 既有 `/sys/**` 风格挂 JWT 过滤器。P0 不引入任何 `bpm_*` 业务表，仅依赖 Flowable 自带 25 张 `act_*` 表。
+**Architecture：**
+- 独立 Maven 工程，parent = `spring-boot-starter-parent 2.7.10`，**不**继承 jeecg-boot-parent
+- P0 实际交付 `bpm-api` + `bpm-biz` 两个子模块；`bpm-spi` 与 `bpm-adapter-jeecg` 留给 P1（SPI 在 P0 没有真正消费者）
+- bpm-biz 只依赖 Spring Boot starter + Flowable starter；与 jeecg 解耦
+- jeecg 集成形态：`mvn install` 出 jar → 在 jeecg-boot v3.5.5 启动模块 pom 中加一条 dependency
 
-**Tech Stack:** Spring Boot 2.7.10 / Spring Cloud 2021.0.3 / MyBatis-Plus 3.5.3.1 / Apache Shiro 1.12.0 / JWT 3.11.0 / Flowable 6.8.0 / MySQL 8.0.27 / Testcontainers 1.19.x / JUnit 5。
+**Tech Stack:** Spring Boot 2.7.10 / Flowable 6.8.0 / MyBatis-Plus 3.5.3.1（jeecg 用，bpm 不用）/ Apache Shiro 1.12.0（jeecg 用，bpm 不用）/ MySQL 8.0.27 / Testcontainers 1.19.x / JUnit 5。
 
-**与设计文档对应章节：** `docs/superpowers/specs/2026-04-30-bpm-module-design.md` §2 P0、§3、§4.3、§6（仅 healthz）、§10。
+**与 spec 对应章节：** `docs/superpowers/specs/2026-04-30-bpm-module-design.md` §1.2、§3.1（4 模块架构）、§3.3（SPI 清单 — P1 真正用）、§3.4（技术选型）、§4.3（Flowable 表配置）、§10（测试策略）。
 
-**前置约定（执行 plan 前必须满足）：**
-1. 已有 jeecg-boot 源码本地工作副本，目录结构含 `jeecg-boot-base-core/`、`jeecg-module-system/`、`jeecg-boot-module-system/`（或同名 starter 模块）。Task 1 给出获取与版本对齐方法。
-2. 本机能连通一个 MySQL 8.x（用于本地验证；CI 用 Testcontainers）。
-3. 本机 JDK 8（jeecg 2.7.x 默认）或 JDK 11，Maven 3.6+。
-4. 本仓库 `/Users/wuhoujin/Documents/dev/bpm` 已是一个 git 工作副本，远端 `https://github.com/lookfree/bpm`。
+**前置假设：**
+1. 工作目录 `/Users/wuhoujin/Documents/dev/bpm`，git 仓库已推到 `https://github.com/lookfree/bpm`，main 分支
+2. 本机 macOS arm64，已装 JDK 11（`/opt/homebrew/opt/openjdk@11`）、Maven 3.9.x、Docker、Git。`source ~/bin/bpm-env.sh` 设置 `JAVA_HOME` + `PATH`
+3. 本仓库已 clone jeecg-boot v3.5.5 到 `./jeecg-boot/`（已 `.gitignore`），仅用于 Task 11 集成冒烟，**不参与日常 mvn build**
 
 ---
 
 ## File Structure（本计划新增/修改的全部文件）
 
-**新增（在 jeecg-boot 源码工作副本根目录下）：**
+**新增（在仓库 `/Users/wuhoujin/Documents/dev/bpm/jeecg-module-bpm/` 下）：**
 ```
 jeecg-module-bpm/
-├── pom.xml                                          # 父 pom，packaging=pom
+├── pom.xml                                          # ★ 父 pom，parent=spring-boot-starter-parent 2.7.10
 ├── jeecg-module-bpm-api/
 │   ├── pom.xml
-│   └── src/main/java/org/jeecg/modules/bpm/api/      # 占位包（后续 phase 放 DTO/Feign）
-│       └── package-info.java
+│   └── src/main/java/org/jeecg/modules/bpm/api/
+│       └── package-info.java                        # 占位（P0 暂无 DTO）
 └── jeecg-module-bpm-biz/
     ├── pom.xml
     └── src/main/
         ├── java/org/jeecg/modules/bpm/
-        │   ├── BpmModuleAutoConfiguration.java       # @Configuration 让 starter 自动加载
-        │   ├── config/
-        │   │   ├── FlowableConfig.java               # 引擎自定义（id 生成器、historyLevel）
-        │   │   └── BpmShiroPathRegistrar.java        # 注册 /bpm/v1/** 给主壳 Shiro 配置
-        │   └── controller/
-        │       └── BpmHealthController.java          # GET /bpm/v1/healthz
+        │   ├── BpmModuleAutoConfiguration.java      # @Configuration
+        │   ├── config/FlowableConfig.java           # IdGenerator(UUID) 等
+        │   └── controller/BpmHealthController.java  # GET /bpm/v1/healthz
         └── resources/
-            ├── META-INF/
-            │   └── spring.factories                  # EnableAutoConfiguration → BpmModuleAutoConfiguration
-            ├── bpm-application.yml                   # 模块默认配置（被主壳引用）
-            └── bpm/
-                └── helloworld.bpmn20.xml             # 用于联调的最小流程
+            ├── META-INF/spring.factories            # EnableAutoConfiguration → BpmModuleAutoConfiguration
+            ├── bpm-application.yml                  # Flowable 默认配置
+            └── bpm/helloworld.bpmn20.xml
 ```
-
-**修改（在 jeecg-boot 源码工作副本下）：**
-- `pom.xml` （根 pom）— `<modules>` 新增 `jeecg-module-bpm`
-- `jeecg-boot-module-system/pom.xml` 或 `jeecg-system-start/pom.xml`（哪个是当前发布产物的启动模块，Task 1 中确认） — `<dependencies>` 新增 `jeecg-module-bpm-biz`
-- `jeecg-boot-module-system/src/main/resources/application.yml` 或 `application-dev.yml` — 新增 `flowable:` 段
-- 主壳 `ShiroConfig.java`（路径 jeecg 不固定，Task 8 会 grep 定位） — 在 `filterChainDefinitionMap` 中放入 `/bpm/v1/**`
 
 **测试新增：**
 ```
 jeecg-module-bpm/jeecg-module-bpm-biz/src/test/
 ├── java/org/jeecg/modules/bpm/
-│   ├── BpmModuleContextTest.java                    # Spring 上下文加载冒烟
-│   ├── controller/BpmHealthControllerTest.java      # MockMvc 验证 healthz
-│   └── engine/HelloWorldFlowIT.java                 # Testcontainers MySQL + 完整链路
-└── resources/
-    └── application-test.yml                         # Test 环境覆盖（关闭 Quartz、关闭 Nacos）
+│   ├── BpmModuleContextTest.java                    # @ApplicationContextRunner 冒烟
+│   ├── config/FlowableConfigTest.java               # IdGenerator 测试
+│   ├── controller/BpmHealthControllerTest.java      # MockMvc
+│   └── engine/HelloWorldFlowIT.java                 # Testcontainers MySQL 完整链路
+└── resources/application-test.yml
 ```
 
-**最终交付到 `/Users/wuhoujin/Documents/dev/bpm/` 仓库的内容：**
-- 上面所有 `jeecg-module-bpm/` 目录树（作为子树拷贝/或 git submodule，Task 0 决策）
-- `docs/superpowers/plans/2026-04-30-bpm-p0-scaffold-and-engine.md`（即本文件）
+**仓库根目录修改：**
+- `INTEGRATION.md`（已存在 — Task 0 已写）：补充"添加 jar 依赖"集成步骤的具体片段
+- 无需修改 `.gitignore`、根目录其它文件
+
+**jeecg-boot v3.5.5 工作副本（`./jeecg-boot/`，仅 Task 11 用）：**
+- `jeecg-boot-module-system/pom.xml`：临时加 `bpm-biz` dep，验证完成后**不提交**（jeecg-boot 是本仓库 .gitignore 过的本地副本）
+- `.../resources/application-dev.yml`：临时引入 bpm 配置 + 数据源
+- `.../config/shiro/ShiroConfig.java`：临时给 `/bpm/v1/**` 配 jwt filter
 
 ---
 
-## Task 0：仓库布局决策与初始化
+## Task 0：（已完成）目录脚手架 + 集成文档
 
-**Files:**
-- 创建：`/Users/wuhoujin/Documents/dev/bpm/INTEGRATION.md`（解释源码集成方式）
-- 修改：`/Users/wuhoujin/Documents/dev/bpm/.gitignore`（新增 `jeecg-boot/` 整树忽略，仅追踪 `jeecg-module-bpm/`）
+**状态：** ✅ 已在 commit `412a3e3`/`724802e` 完成。本 Task 不需要重新执行；**Task 13 会做一次小扩充**：在已存在的 `jeecg-module-bpm/` 下追加 `jeecg-module-bpm-spi/` 与 `jeecg-module-bpm-adapter-jeecg/` 两个空目录骨架，方便 P1 直接接入。
 
-仓库 `lookfree/bpm` 当前只放需求文档，需要决定：本仓库交付的是**模块独立工程**（只含 `jeecg-module-bpm/`，由集成方手动 drop 到 jeecg-boot），还是**fork 整个 jeecg-boot**。本计划**采用前者**——模块独立工程，理由：（1）jeecg-boot 体积大（>200MB），后续合并 upstream 升级困难；（2）模块独立更便于多客户复用；（3）现网 manage.iimt.org.cn 已部署 v0.1.8，集成方知道自己的版本。
-
-- [ ] **Step 1：写 INTEGRATION.md 说明集成步骤**
-
-```markdown
-# BPM 模块集成方法
-
-本仓库交付的是 jeecg-boot 的一个独立 Maven 子模块 `jeecg-module-bpm`，
-不包含 jeecg-boot 主体源码。集成方需自行准备 jeecg-boot v0.1.8
-（或对应版本）源码，然后按以下步骤接入。
-
-## 1. 准备 jeecg-boot
-git clone https://github.com/jeecgboot/jeecg-boot.git
-cd jeecg-boot
-git checkout v3.6.3   # 与 jeecgboot-vue3 v0.1.8 对应的服务端 tag，需现场确认（C1）
-
-## 2. 把本模块放入
-将本仓库 `jeecg-module-bpm/` 整目录拷贝到 jeecg-boot 根目录：
-cp -r /path/to/bpm/jeecg-module-bpm /path/to/jeecg-boot/
-
-## 3. 修改 jeecg-boot 根 pom.xml
-在 <modules> 下新增：
-  <module>jeecg-module-bpm</module>
-
-## 4. 修改启动模块依赖
-在 jeecg-boot-module-system/pom.xml（或 jeecg-system-start/pom.xml，依发行版而定）
-的 <dependencies> 中新增：
-  <dependency>
-    <groupId>org.jeecgframework.boot</groupId>
-    <artifactId>jeecg-module-bpm-biz</artifactId>
-    <version>${project.version}</version>
-  </dependency>
-
-## 5. 配置数据源 & Flowable
-见 docs/superpowers/plans/2026-04-30-bpm-p0-scaffold-and-engine.md Task 7。
-
-## 6. 配置 Shiro 放行路径
-见 Task 8。
-```
-
-- [ ] **Step 2：更新 .gitignore（如果需要本地放 jeecg-boot 源码做联调）**
-
-```bash
-cat >> /Users/wuhoujin/Documents/dev/bpm/.gitignore <<'EOF'
-
-# jeecg-boot 源码副本（仅本地用于联调，不入仓库）
-/jeecg-boot/
-EOF
-```
-
-- [ ] **Step 3：在 /Users/wuhoujin/Documents/dev/bpm/ 下初始化 jeecg-module-bpm 目录骨架**
-
-```bash
-cd /Users/wuhoujin/Documents/dev/bpm
-mkdir -p jeecg-module-bpm/jeecg-module-bpm-api/src/main/java/org/jeecg/modules/bpm/api
-mkdir -p jeecg-module-bpm/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/{config,controller,engine}
-mkdir -p jeecg-module-bpm/jeecg-module-bpm-biz/src/main/resources/{META-INF,bpm}
-mkdir -p jeecg-module-bpm/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/{controller,engine}
-mkdir -p jeecg-module-bpm/jeecg-module-bpm-biz/src/test/resources
-```
-
-- [ ] **Step 4：commit**
-
-```bash
-cd /Users/wuhoujin/Documents/dev/bpm
-git add INTEGRATION.md .gitignore jeecg-module-bpm/
-git commit -m "chore(bpm-p0): scaffold module directory & integration doc"
-```
-
-> **集成方在 jeecg-boot 工作副本中执行后续 Task。本仓库内只持有 `jeecg-module-bpm/` 子树。下文出现 `${JEECG_HOME}` 指 jeecg-boot 工作副本根目录；`${BPM_HOME}` 指本仓库的 `jeecg-module-bpm/`。**
+> 本 plan 的 Task 编号从 1 重新开始，跟上面 Task 0 不冲突。
 
 ---
 
-## Task 1：jeecg-boot 版本对齐与本地构建冒烟
+## Task 1：环境核验
 
-**Files:**
-- 读取：`${JEECG_HOME}/pom.xml`（确认 jeecgboot.version、parent pom 坐标）
-- 读取：`${JEECG_HOME}/jeecg-boot-module-system/pom.xml`（确认启动模块名）
-- 读取：`${JEECG_HOME}/db/`（确认 SQL 脚本，用于查 `act_*` 是否已带）
-- 创建：`${BPM_HOME}/COMPATIBILITY.md`（记录确认结果）
+**Files:** 创建 `jeecg-module-bpm/COMPATIBILITY.md`
 
-- [ ] **Step 1：定位 jeecgboot-vue3 v0.1.8 对应的服务端 tag**
+- [ ] **Step 1：核验工具链**
 
 ```bash
-cd ${JEECG_HOME}
-git tag --sort=-v:refname | head -20
-# 期望看到 v3.6.3 / v3.6.2 / v3.6.1 等。jeecgboot-vue3 README 通常会写
-# "服务端依赖 jeecg-boot v3.6.x"。如无法确定，按以下方式回退：
-git log --oneline --all | grep -i "v0.1.8\|3.6"
+source ~/bin/bpm-env.sh
+java -version 2>&1 | head -1
+mvn -v 2>&1 | head -1
+docker --version
+ls jeecg-boot/pom.xml | head -1
 ```
 
-记录确认到的 tag 到 `${BPM_HOME}/COMPATIBILITY.md`：
+期望：JDK 11.x、Maven 3.9.x、Docker、jeecg-boot v3.5.5 副本就绪。
+
+- [ ] **Step 2：写 COMPATIBILITY.md**
+
+`jeecg-module-bpm/COMPATIBILITY.md`：
 ```markdown
 # 兼容性核实结果
 
-| 项 | 值 | 来源 |
+| 项 | 值 | 说明 |
 |---|---|---|
-| jeecgboot-vue3 版本 | v0.1.8 | manage.iimt.org.cn 浏览器侧观察 |
-| jeecg-boot 服务端 tag | v3.6.3（待管理员确认）| 对应关系 |
-| Spring Boot | 2.7.10 | jeecg-boot/pom.xml 顶部 properties |
-| 启动模块 | jeecg-boot-module-system / jeecg-system-start（任选其一）| ${JEECG_HOME}/<module>/pom.xml |
-| 现存 act_* 表 | 是/否 | grep -r 'act_re_procdef' ${JEECG_HOME}/db/ |
-| 现存 Activiti 集成 | 是/否 | grep -ri 'activiti' ${JEECG_HOME}/jeecg-boot-module-system/src/main/resources/ |
+| 目标 jeecg-boot 版本 | v3.5.5 | 通过 root pom.xml 版本组合唯一识别 |
+| BPM 模块 parent | spring-boot-starter-parent 2.7.10 | 不继承 jeecg-boot-parent |
+| BPM 模块 Java 编译目标 | 1.8 | 跟 jeecg 保持一致，运行时支持 JDK 8+ |
+| BPM 模块本机构建 JDK | 11 (Homebrew arm64) | macOS arm64 上 openjdk@8 brew core 没 arm64 包；JDK 11 编译 1.8 字节码无副作用 |
+| Flowable 版本 | 6.8.0 | 与 Spring Boot 2.7.x 已验证兼容 |
+| 测试用 MySQL | 8.0.27（Testcontainers） | 与生产环境一致 |
+| 已知未确认项 | jeecg `act_*` 表是否已存在 | Task 11 中查 jeecg-boot/db/ 与启动后真实状态 |
 ```
 
-- [ ] **Step 2：本地构建冒烟（不带 BPM 模块）**
-
-```bash
-cd ${JEECG_HOME}
-mvn clean install -DskipTests -pl jeecg-boot-module-system -am
-```
-
-期望：BUILD SUCCESS。如失败，定位是 jeecg 自身依赖问题（与 BPM 无关），优先按 jeecg-boot 官方文档处理；本任务暂停。
-
-- [ ] **Step 3：启动主壳，浏览器访问 swagger 确认基线工作**
-
-```bash
-cd ${JEECG_HOME}/jeecg-boot-module-system
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-# 在新终端：
-curl -sS http://localhost:8080/jeecg-boot/sys/getCheckCode | head
-```
-
-期望：返回 JSON（不必关注内容），HTTP 200。证明基线服务能起来。
-
-- [ ] **Step 4：把 COMPATIBILITY.md 提交回 BPM 仓库**
+- [ ] **Step 3：commit**
 
 ```bash
 cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/COMPATIBILITY.md
-git commit -m "docs(bpm-p0): record jeecg-boot version & build smoke result"
+git commit -m "docs(bpm-p0): record toolchain & compatibility decisions"
 ```
 
 ---
 
-## Task 2：父 pom（jeecg-module-bpm/pom.xml）
+## Task 2：父 pom（独立工程，不依赖 jeecg-boot-parent）
 
-**Files:**
-- 创建：`${BPM_HOME}/pom.xml`
+**Files:** 创建 `jeecg-module-bpm/pom.xml`
 
 - [ ] **Step 1：写父 pom**
 
-`${BPM_HOME}/pom.xml`：
+`jeecg-module-bpm/pom.xml`：
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
@@ -227,15 +133,18 @@ git commit -m "docs(bpm-p0): record jeecg-boot version & build smoke result"
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.jeecgframework.boot</groupId>
-        <artifactId>jeecg-boot-parent</artifactId>
-        <version>${revision}</version>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>2.7.10</version>
+        <relativePath/>
     </parent>
 
+    <groupId>com.iimt.bpm</groupId>
     <artifactId>jeecg-module-bpm</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>${project.artifactId}</name>
-    <description>BPM 业务流程配置模块（jeecg 子模块）</description>
+    <description>独立 BPM 模块（适配 jeecg-boot v3.5.5 等宿主系统）</description>
 
     <modules>
         <module>jeecg-module-bpm-api</module>
@@ -243,7 +152,12 @@ git commit -m "docs(bpm-p0): record jeecg-boot version & build smoke result"
     </modules>
 
     <properties>
+        <java.version>1.8</java.version>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <flowable.version>6.8.0</flowable.version>
+        <testcontainers.version>1.19.3</testcontainers.version>
     </properties>
 
     <dependencyManagement>
@@ -254,36 +168,55 @@ git commit -m "docs(bpm-p0): record jeecg-boot version & build smoke result"
                 <version>${flowable.version}</version>
             </dependency>
             <dependency>
-                <groupId>org.jeecgframework.boot</groupId>
+                <groupId>com.iimt.bpm</groupId>
                 <artifactId>jeecg-module-bpm-api</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.testcontainers</groupId>
+                <artifactId>testcontainers-bom</artifactId>
+                <version>${testcontainers.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
 ```
 
-> **Why parent=jeecg-boot-parent：** jeecg 用 `${revision}` 占位符做版本统一，子模块继承父 pom 即可拿到 jeecg 的所有 dependencyManagement（Spring Boot、MyBatis-Plus、Shiro 等），避免版本漂移。`jeecg-boot-parent` 的 artifactId 在不同 jeecg 发行版可能写作 `jeecg-boot-base-core` 的 parent；以 Task 1 中 grep `<parent>` 的实际坐标为准。
+> **Why `groupId=com.iimt.bpm`：** 跟 jeecg 的 `org.jeecgframework.boot` 区分，避免被误认为是 jeecg 官方模块；后续可改成项目方实际域名。
+>
+> **Why `version=0.1.0-SNAPSHOT`：** 模块独立版本号，跟 jeecg-boot 版本号脱钩，方便独立发布。
 
-- [ ] **Step 2：commit**
+- [ ] **Step 2：构建验证**
+
+```bash
+source ~/bin/bpm-env.sh
+cd jeecg-module-bpm
+mvn -N validate
+```
+
+期望：BUILD SUCCESS。`-N` 跳过子模块（它们还没 pom.xml），只验证父 pom。
+
+- [ ] **Step 3：commit**
 
 ```bash
 cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/pom.xml
-git commit -m "build(bpm-p0): add bpm parent pom with flowable dependency mgmt"
+git commit -m "build(bpm-p0): add standalone parent pom (spring-boot-starter-parent 2.7.10)"
 ```
 
 ---
 
-## Task 3：jeecg-module-bpm-api 子模块（占位）
+## Task 3：jeecg-module-bpm-api 子模块
 
 **Files:**
-- 创建：`${BPM_HOME}/jeecg-module-bpm-api/pom.xml`
-- 创建：`${BPM_HOME}/jeecg-module-bpm-api/src/main/java/org/jeecg/modules/bpm/api/package-info.java`
+- 创建 `jeecg-module-bpm/jeecg-module-bpm-api/pom.xml`
+- 创建 `jeecg-module-bpm/jeecg-module-bpm-api/src/main/java/org/jeecg/modules/bpm/api/package-info.java`
 
-api 模块在 P0 是空骨架，给 P2+ 放 DTO/Feign。现在建立它是为了固化 Maven 坐标。
+P0 阶段 api 子模块为空骨架，固化坐标。
 
-- [ ] **Step 1：写 api 子模块 pom**
+- [ ] **Step 1：api 子模块 pom**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -294,29 +227,27 @@ api 模块在 P0 是空骨架，给 P2+ 放 DTO/Feign。现在建立它是为了
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.jeecgframework.boot</groupId>
+        <groupId>com.iimt.bpm</groupId>
         <artifactId>jeecg-module-bpm</artifactId>
-        <version>${revision}</version>
+        <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>jeecg-module-bpm-api</artifactId>
     <name>${project.artifactId}</name>
+    <description>BPM 模块对外契约（DTO / 异常 / 公共类型），无 jeecg / Spring 强耦合</description>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.jeecgframework.boot</groupId>
-            <artifactId>jeecg-system-api</artifactId>
-        </dependency>
-    </dependencies>
+    <!-- P0：空模块，无依赖 -->
 </project>
 ```
 
-- [ ] **Step 2：写 package-info 占位**
+- [ ] **Step 2：占位文件**
 
-`${BPM_HOME}/jeecg-module-bpm-api/src/main/java/org/jeecg/modules/bpm/api/package-info.java`：
+`jeecg-module-bpm-api/src/main/java/org/jeecg/modules/bpm/api/package-info.java`：
 ```java
 /**
- * BPM 模块跨工程契约（DTO / Feign 接口）。P0 阶段为空。
+ * BPM 模块对外契约（DTO / 异常 / 公共类型）。P0 阶段为空骨架。
+ * <p>
+ * 此包不依赖 jeecg / Spring，可以安全地被任何 Java 模块引用。
  */
 package org.jeecg.modules.bpm.api;
 ```
@@ -324,28 +255,29 @@ package org.jeecg.modules.bpm.api;
 - [ ] **Step 3：构建验证**
 
 ```bash
-cd ${JEECG_HOME}
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-api -am clean install -DskipTests
+cd /Users/wuhoujin/Documents/dev/bpm
+source ~/bin/bpm-env.sh
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-api -am clean install
 ```
 
-期望：BUILD SUCCESS。
+期望：BUILD SUCCESS；本机 `~/.m2/repository/com/iimt/bpm/jeecg-module-bpm-api/0.1.0-SNAPSHOT/` 出现 jar。
 
 - [ ] **Step 4：commit**
 
 ```bash
-cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/jeecg-module-bpm-api/
-git commit -m "build(bpm-p0): scaffold jeecg-module-bpm-api submodule"
+git commit -m "build(bpm-p0): scaffold bpm-api submodule (empty placeholder)"
 ```
 
 ---
 
 ## Task 4：jeecg-module-bpm-biz 子模块 pom
 
-**Files:**
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/pom.xml`
+**Files:** 创建 `jeecg-module-bpm/jeecg-module-bpm-biz/pom.xml`
 
-- [ ] **Step 1：写 biz 子模块 pom**
+> **重要约束：** 这个 pom **不能**出现 `org.jeecgframework.boot:*` 任何依赖。bpm-biz 必须保持对 jeecg 零依赖，jeecg 的对接由后续 P1 的 adapter 负责。
+
+- [ ] **Step 1：biz 子模块 pom**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -356,44 +288,39 @@ git commit -m "build(bpm-p0): scaffold jeecg-module-bpm-api submodule"
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.jeecgframework.boot</groupId>
+        <groupId>com.iimt.bpm</groupId>
         <artifactId>jeecg-module-bpm</artifactId>
-        <version>${revision}</version>
+        <version>0.1.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>jeecg-module-bpm-biz</artifactId>
     <name>${project.artifactId}</name>
+    <description>BPM 引擎实现 + Controller。不依赖 jeecg。</description>
 
     <dependencies>
         <!-- 模块内部 -->
         <dependency>
-            <groupId>org.jeecgframework.boot</groupId>
+            <groupId>com.iimt.bpm</groupId>
             <artifactId>jeecg-module-bpm-api</artifactId>
         </dependency>
 
-        <!-- jeecg 系统模块（拿 Shiro/JWT/User 上下文）-->
+        <!-- Spring Boot Web（非可选 — Controller 需要）-->
         <dependency>
-            <groupId>org.jeecgframework.boot</groupId>
-            <artifactId>jeecg-system-local-api</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- Flowable 流程引擎 -->
+        <!-- Flowable -->
         <dependency>
             <groupId>org.flowable</groupId>
             <artifactId>flowable-spring-boot-starter-process</artifactId>
             <exclusions>
-                <!-- jeecg 已用 mybatis-plus，排除 flowable 自带 mybatis 防冲突 -->
+                <!-- 防止 Flowable 自带 mybatis 与宿主 mybatis-plus 冲突 -->
                 <exclusion>
                     <groupId>org.mybatis</groupId>
                     <artifactId>mybatis</artifactId>
                 </exclusion>
             </exclusions>
-        </dependency>
-
-        <!-- Web -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
         <!-- 测试 -->
@@ -405,13 +332,11 @@ git commit -m "build(bpm-p0): scaffold jeecg-module-bpm-api submodule"
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>mysql</artifactId>
-            <version>1.19.3</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>junit-jupiter</artifactId>
-            <version>1.19.3</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -423,21 +348,21 @@ git commit -m "build(bpm-p0): scaffold jeecg-module-bpm-api submodule"
 </project>
 ```
 
-- [ ] **Step 2：构建验证**
+- [ ] **Step 2：构建验证（依赖能解析）**
 
 ```bash
-cd ${JEECG_HOME}
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-biz -am clean install -DskipTests
+source ~/bin/bpm-env.sh
+cd /Users/wuhoujin/Documents/dev/bpm
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-biz -am dependency:resolve
 ```
 
-期望：BUILD SUCCESS。Flowable 6.8.0 应能解析下来。
+期望：BUILD SUCCESS；Flowable + Testcontainers + Spring Boot Web 都被解析下来。
 
 - [ ] **Step 3：commit**
 
 ```bash
-cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/jeecg-module-bpm-biz/pom.xml
-git commit -m "build(bpm-p0): bpm-biz pom with flowable + testcontainers"
+git commit -m "build(bpm-p0): bpm-biz pom (flowable + testcontainers, NO jeecg deps)"
 ```
 
 ---
@@ -445,14 +370,15 @@ git commit -m "build(bpm-p0): bpm-biz pom with flowable + testcontainers"
 ## Task 5：自动配置入口（spring.factories + AutoConfiguration）
 
 **Files:**
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/BpmModuleAutoConfiguration.java`
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/main/resources/META-INF/spring.factories`
+- 创建 `jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/BpmModuleAutoConfiguration.java`
+- 创建 `jeecg-module-bpm-biz/src/main/resources/META-INF/spring.factories`
+- 创建测试 `BpmModuleContextTest.java`
 
-让 biz 被引入主启动模块时**零侵入自动加载**——不需要改主壳的 `@ComponentScan`。
+让 biz 被引入宿主时**零侵入自动加载**——宿主无需改 `@ComponentScan`。
 
-- [ ] **Step 1：先写测试**
+- [ ] **Step 1：写测试**
 
-`${BPM_HOME}/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/BpmModuleContextTest.java`：
+`jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/BpmModuleContextTest.java`：
 ```java
 package org.jeecg.modules.bpm;
 
@@ -475,18 +401,19 @@ class BpmModuleContextTest {
 }
 ```
 
-- [ ] **Step 2：跑测试看它失败**
+- [ ] **Step 2：跑测试看其失败**
 
 ```bash
-cd ${JEECG_HOME}
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-biz test -Dtest=BpmModuleContextTest
+source ~/bin/bpm-env.sh
+cd /Users/wuhoujin/Documents/dev/bpm
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-biz test -Dtest=BpmModuleContextTest
 ```
 
-期望：编译失败，找不到 `BpmModuleAutoConfiguration`。
+期望：编译失败（找不到 `BpmModuleAutoConfiguration`）。
 
-- [ ] **Step 3：写最小实现**
+- [ ] **Step 3：写实现**
 
-`${BPM_HOME}/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/BpmModuleAutoConfiguration.java`：
+`jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/BpmModuleAutoConfiguration.java`：
 ```java
 package org.jeecg.modules.bpm;
 
@@ -501,134 +428,56 @@ public class BpmModuleAutoConfiguration {
 
 - [ ] **Step 4：注册到 spring.factories**
 
-`${BPM_HOME}/jeecg-module-bpm-biz/src/main/resources/META-INF/spring.factories`：
+`jeecg-module-bpm-biz/src/main/resources/META-INF/spring.factories`：
 ```properties
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
 org.jeecg.modules.bpm.BpmModuleAutoConfiguration
 ```
 
-- [ ] **Step 5：跑测试验证通过**
+- [ ] **Step 5：跑测试验证**
 
 ```bash
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-biz test -Dtest=BpmModuleContextTest
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-biz test -Dtest=BpmModuleContextTest
 ```
 
-期望：BUILD SUCCESS，1 test passed。
+期望：1 test passed。
 
 - [ ] **Step 6：commit**
 
 ```bash
-cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/BpmModuleAutoConfiguration.java \
         jeecg-module-bpm/jeecg-module-bpm-biz/src/main/resources/META-INF/spring.factories \
         jeecg-module-bpm/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/BpmModuleContextTest.java
-git commit -m "feat(bpm-p0): add module auto-configuration entry point"
+git commit -m "feat(bpm-p0): module auto-configuration entry point"
 ```
 
 ---
 
-## Task 6：把 BPM 接入 jeecg 主启动模块
+## Task 6：Flowable 配置（IdGenerator + history 默认值）
 
 **Files:**
-- 修改：`${JEECG_HOME}/pom.xml`（根 pom）
-- 修改：`${JEECG_HOME}/jeecg-boot-module-system/pom.xml`（启动模块）
+- 创建 `jeecg-module-bpm-biz/src/main/resources/bpm-application.yml`
+- 创建 `jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/config/FlowableConfig.java`
+- 创建测试 `FlowableConfigTest.java`
 
-> **注意：** 启动模块的实际 artifactId 由 Task 1 确认。下文以 `jeecg-boot-module-system` 为占位。
+- [ ] **Step 1：默认配置 yml（被宿主 application.yml 通过 spring.config.import 引入）**
 
-- [ ] **Step 1：根 pom 注册 module**
-
-打开 `${JEECG_HOME}/pom.xml`，在 `<modules>` 段新增一行（**保持原有顺序，仅追加**）：
-```xml
-<modules>
-    ... 已有 ...
-    <module>jeecg-module-bpm</module>
-</modules>
-```
-
-- [ ] **Step 2：启动模块 pom 加依赖**
-
-打开 `${JEECG_HOME}/jeecg-boot-module-system/pom.xml`，在 `<dependencies>` 中新增：
-```xml
-<dependency>
-    <groupId>org.jeecgframework.boot</groupId>
-    <artifactId>jeecg-module-bpm-biz</artifactId>
-    <version>${revision}</version>
-</dependency>
-```
-
-- [ ] **Step 3：从根目录全量构建**
-
-```bash
-cd ${JEECG_HOME}
-mvn clean install -DskipTests
-```
-
-期望：BUILD SUCCESS。看到 `jeecg-module-bpm`、`jeecg-module-bpm-api`、`jeecg-module-bpm-biz` 都被编译。
-
-- [ ] **Step 4：启动主壳，确认未损坏**
-
-```bash
-cd ${JEECG_HOME}/jeecg-boot-module-system
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-```
-
-观察启动日志：
-- 不应有 NoSuchBeanDefinitionException、CircularDependency 之类异常
-- 应当看到 `o.flowable.engine.impl.ProcessEngineImpl` 之类的 Flowable 启动日志（Task 7 之后才会真正成功；本步骤如果 Flowable 因 datasource 配置缺失而抛错则在 Task 7 处理）
-
-如果启动**因 Flowable 配置而失败**——继续走 Task 7。如果**因其它原因失败**——回退本步骤的 pom 改动，定位问题。
-
-- [ ] **Step 5：commit（在 jeecg-boot 工作副本中）**
-
-> 这一步的 commit 在 jeecg-boot 工作副本中进行，不在本 BPM 仓库。集成方按其 jeecg-boot fork 的流程提交。
-
----
-
-## Task 7：Flowable 配置（数据源 + 历史 + Shiro 排除）
-
-**Files:**
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/main/resources/bpm-application.yml`
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/config/FlowableConfig.java`
-- 修改：`${JEECG_HOME}/jeecg-boot-module-system/src/main/resources/application-dev.yml`
-
-- [ ] **Step 1：写 Flowable 配置文档（YAML 模板）**
-
-`${BPM_HOME}/jeecg-module-bpm-biz/src/main/resources/bpm-application.yml`：
+`jeecg-module-bpm-biz/src/main/resources/bpm-application.yml`：
 ```yaml
-# 默认 BPM 模块配置；主壳 application.yml 通过 spring.config.import 引入。
 flowable:
-  database-schema-update: true        # 首次启动建 act_* 表；生产改 false / none
-  history-level: full                 # 保留任务全量历史
-  async-executor-activate: true       # 异步执行器，用于 timer/超时
-  check-process-definitions: false    # 不自动加载 classpath 下的 bpmn 文件
-  process:
-    servlet:
-      load-on-startup: -1
-  # 与 jeecg 共用同一个 datasource，无需单独配置
+  database-schema-update: true        # 首次建 act_* 表；生产改 false
+  history-level: full                 # 任务全量历史
+  async-executor-activate: true       # 异步执行器（用于 timer）
+  check-process-definitions: false    # 不自动加载 classpath 下的 bpmn
 ```
 
-- [ ] **Step 2：在 jeecg 主壳启动配置中引入**
+- [ ] **Step 2：写 FlowableConfig 测试**
 
-`${JEECG_HOME}/jeecg-boot-module-system/src/main/resources/application-dev.yml`，最顶部已存在的 `spring:` 段加入 `config.import`：
-```yaml
-spring:
-  config:
-    import:
-      - classpath:bpm-application.yml
-  # ... 已有内容
-```
-
-如果文件已使用 `spring.profiles.include`，按 jeecg 现有风格用 `include: bpm` 形式（同时新建 `application-bpm.yml` 复制 bpm-application.yml 内容）。**先尝试 `config.import` 方案，如不兼容回退到 profile-include。**
-
-- [ ] **Step 3：写 FlowableConfig（自定义 ID 生成器与 historyLevel 二次确认）**
-
-先写测试：
-`${BPM_HOME}/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/config/FlowableConfigTest.java`：
+`jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/config/FlowableConfigTest.java`：
 ```java
 package org.jeecg.modules.bpm.config;
 
 import org.flowable.common.engine.impl.cfg.IdGenerator;
-import org.flowable.engine.ProcessEngineConfiguration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
@@ -637,8 +486,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class FlowableConfigTest {
 
     private final ApplicationContextRunner runner =
-            new ApplicationContextRunner()
-                    .withUserConfiguration(FlowableConfig.class);
+            new ApplicationContextRunner().withUserConfiguration(FlowableConfig.class);
 
     @Test
     void exposesUuidIdGenerator() {
@@ -647,26 +495,28 @@ class FlowableConfigTest {
             String first = gen.getNextId();
             String second = gen.getNextId();
             assertThat(first).isNotEqualTo(second);
-            assertThat(first).hasSize(36); // UUID
+            assertThat(first).hasSize(36);
         });
     }
 }
 ```
 
-跑测试看其失败：
+- [ ] **Step 3：跑测试看其失败**
+
 ```bash
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-biz test -Dtest=FlowableConfigTest
+source ~/bin/bpm-env.sh
+cd /Users/wuhoujin/Documents/dev/bpm
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-biz test -Dtest=FlowableConfigTest
 ```
 
-期望：编译失败（FlowableConfig 不存在）。
+期望：编译失败。
 
 - [ ] **Step 4：写实现**
 
-`${BPM_HOME}/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/config/FlowableConfig.java`：
+`jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/config/FlowableConfig.java`：
 ```java
 package org.jeecg.modules.bpm.config;
 
-import org.flowable.common.engine.api.scope.ScopeTypes;
 import org.flowable.common.engine.impl.cfg.IdGenerator;
 import org.flowable.common.engine.impl.persistence.StrongUuidGenerator;
 import org.springframework.context.annotation.Bean;
@@ -675,9 +525,6 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class FlowableConfig {
 
-    /**
-     * 默认基于 db sequence；分布式部署下用 UUID 防冲突。
-     */
     @Bean
     public IdGenerator flowableIdGenerator() {
         return new StrongUuidGenerator();
@@ -688,116 +535,50 @@ public class FlowableConfig {
 - [ ] **Step 5：跑测试验证**
 
 ```bash
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-biz test -Dtest=FlowableConfigTest
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-biz test -Dtest=FlowableConfigTest
 ```
 
 期望：1 test passed。
 
-- [ ] **Step 6：启动主壳验证 act_* 表自动建出来**
+- [ ] **Step 6：commit**
 
 ```bash
-cd ${JEECG_HOME}/jeecg-boot-module-system
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-# 在 MySQL 里检查：
-mysql -ujeecg -p jeecg-boot -e "SHOW TABLES LIKE 'act_%';" | wc -l
-```
-
-期望：返回行数 ≥ 25（Flowable 6.8 表数）。
-
-- [ ] **Step 7：commit**
-
-```bash
-cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/jeecg-module-bpm-biz/src/main/resources/bpm-application.yml \
         jeecg-module-bpm/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/config/FlowableConfig.java \
         jeecg-module-bpm/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/config/FlowableConfigTest.java
-git commit -m "feat(bpm-p0): wire flowable engine, history-level=full, uuid id gen"
+git commit -m "feat(bpm-p0): flowable config with uuid id generator + default yml"
 ```
 
 ---
 
-## Task 8：Shiro 路径注册——`/bpm/v1/**` 走 JWT
+## Task 7：健康检查 endpoint（TDD）
 
 **Files:**
-- 修改：`${JEECG_HOME}/jeecg-boot-base/jeecg-boot-base-tools/src/main/java/org/jeecg/config/shiro/ShiroConfig.java`（路径以 grep 实际为准）
+- 创建 `jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/controller/BpmHealthController.java`
+- 创建测试 `BpmHealthControllerTest.java`
 
-> **预备工作：** grep 找到 jeecg 中所有 `filterChainDefinitionMap.put(`：
-> ```bash
-> grep -rn "filterChainDefinitionMap.put" ${JEECG_HOME}/ --include="*.java" | head -5
-> ```
-> 找到唯一的 `ShiroConfig.java` 路径，对照下文。
-
-jeecg 的现有 `ShiroConfig` 用一个长 if-else 或 list 注册放行路径与 JWT 路径。我们**只需在受 JWT 保护的段加入 `/bpm/v1/**`** 即可，不需要新写 Filter。
-
-- [ ] **Step 1：在 ShiroConfig 中找到注册段**
-
-阅读 `${JEECG_HOME}/.../shiro/ShiroConfig.java`，定位 `filterChainDefinitionMap` 添加项。jeecg 大多形如：
-```java
-filterChainDefinitionMap.put("/sys/**", "jwt");
-filterChainDefinitionMap.put("/test/**", "anon");
-```
-
-- [ ] **Step 2：新增一行**
-
-```java
-filterChainDefinitionMap.put("/bpm/v1/**", "jwt");
-```
-
-如果现网用了 `org.jeecg.config.shiro.filters.JwtFilter` 自定义名，按现有命名为准。
-
-- [ ] **Step 3：构建 + 启动验证**
-
-```bash
-cd ${JEECG_HOME}
-mvn install -DskipTests -pl jeecg-boot-module-system -am
-cd jeecg-boot-module-system
-mvn spring-boot:run -Dspring-boot.run.profiles=dev
-```
-
-```bash
-# 不带 token 访问，应当 401（被 JWT filter 拦截）：
-curl -sS -o /dev/null -w "%{http_code}\n" http://localhost:8080/jeecg-boot/bpm/v1/healthz
-```
-
-期望：401（即使 healthz endpoint 还没有，filter 已经先拦——这正是我们要的）。
-
-> **暂时**还没有 healthz 实现。Task 9 写它。
-
-- [ ] **Step 4：在 jeecg-boot 工作副本中 commit**
-
-> 同 Task 6，集成方按 jeecg-boot fork 提交流程操作。
-
----
-
-## Task 9：健康检查 endpoint（TDD）
-
-**Files:**
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/controller/BpmHealthController.java`
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/controller/BpmHealthControllerTest.java`
-
-返回 `{"status":"UP","engine":"flowable","version":"6.8.0"}`。这个 endpoint 是 P0 唯一对外的接口，用于运维确认引擎已经上线。
+返回 `{"status":"UP","engine":"flowable","version":"6.8.0","name":"default"}`。
 
 - [ ] **Step 1：写测试**
 
+`jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/controller/BpmHealthControllerTest.java`：
 ```java
 package org.jeecg.modules.bpm.controller;
 
 import org.flowable.engine.ProcessEngine;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(classes = {
-        org.jeecg.modules.bpm.BpmModuleAutoConfiguration.class
-})
+@SpringBootTest(classes = { BpmHealthController.class })
 @AutoConfigureMockMvc
 class BpmHealthControllerTest {
 
@@ -812,7 +593,8 @@ class BpmHealthControllerTest {
            .andExpect(status().isOk())
            .andExpect(jsonPath("$.status").value("UP"))
            .andExpect(jsonPath("$.engine").value("flowable"))
-           .andExpect(jsonPath("$.version").exists());
+           .andExpect(jsonPath("$.version").exists())
+           .andExpect(jsonPath("$.name").value("default"));
     }
 }
 ```
@@ -820,13 +602,16 @@ class BpmHealthControllerTest {
 - [ ] **Step 2：跑测试看其失败**
 
 ```bash
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-biz test -Dtest=BpmHealthControllerTest
+source ~/bin/bpm-env.sh
+cd /Users/wuhoujin/Documents/dev/bpm
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-biz test -Dtest=BpmHealthControllerTest
 ```
 
-期望：404 或编译失败。
+期望：编译失败。
 
 - [ ] **Step 3：写实现**
 
+`jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/controller/BpmHealthController.java`：
 ```java
 package org.jeecg.modules.bpm.controller;
 
@@ -860,65 +645,42 @@ public class BpmHealthController {
 }
 ```
 
-- [ ] **Step 4：跑测试验证通过**
+- [ ] **Step 4：跑测试验证**
 
 ```bash
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-biz test -Dtest=BpmHealthControllerTest
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-biz test -Dtest=BpmHealthControllerTest
 ```
 
 期望：1 test passed。
 
-- [ ] **Step 5：手动验证（启动主壳后）**
+- [ ] **Step 5：commit**
 
 ```bash
-# 没 token：
-curl -sS -o /dev/null -w "%{http_code}\n" http://localhost:8080/jeecg-boot/bpm/v1/healthz
-# 期望：401
-
-# 拿一个 dev token（用 jeecg /sys/login admin/123456 登录拿 X-Access-Token），然后：
-TOKEN=<paste-token>
-curl -sS -H "X-Access-Token: $TOKEN" http://localhost:8080/jeecg-boot/bpm/v1/healthz
-```
-
-期望：HTTP 200，body 含 `"status":"UP"`、`"engine":"flowable"`。
-
-- [ ] **Step 6：commit**
-
-```bash
-cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/jeecg-module-bpm-biz/src/main/java/org/jeecg/modules/bpm/controller/BpmHealthController.java \
         jeecg-module-bpm/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/controller/BpmHealthControllerTest.java
-git commit -m "feat(bpm-p0): add /bpm/v1/healthz returning engine version"
+git commit -m "feat(bpm-p0): /bpm/v1/healthz returning engine version"
 ```
 
 ---
 
-## Task 10：hello-world BPMN 资源
+## Task 8：hello-world BPMN 资源
 
-**Files:**
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/main/resources/bpm/helloworld.bpmn20.xml`
+**Files:** 创建 `jeecg-module-bpm-biz/src/main/resources/bpm/helloworld.bpmn20.xml`
 
-最小流程：StartEvent → UserTask("Hello") → EndEvent。
-
-- [ ] **Step 1：写 BPMN XML**
+- [ ] **Step 1：写 BPMN**
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:flowable="http://flowable.org/bpmn"
-             targetNamespace="http://jeecg.org/bpm/sample"
+             targetNamespace="http://iimt.com/bpm/sample"
              id="defs_helloworld">
 
     <process id="bpm_helloworld" name="BPM Hello World" isExecutable="true">
-
         <startEvent id="start"/>
-
         <sequenceFlow id="flow1" sourceRef="start" targetRef="task_hello"/>
-
         <userTask id="task_hello" name="Say Hello" flowable:assignee="${initiator}"/>
-
         <sequenceFlow id="flow2" sourceRef="task_hello" targetRef="end"/>
-
         <endEvent id="end"/>
     </process>
 </definitions>
@@ -927,43 +689,34 @@ git commit -m "feat(bpm-p0): add /bpm/v1/healthz returning engine version"
 - [ ] **Step 2：commit**
 
 ```bash
-cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/jeecg-module-bpm-biz/src/main/resources/bpm/helloworld.bpmn20.xml
-git commit -m "test(bpm-p0): add hello-world bpmn resource"
+git commit -m "test(bpm-p0): hello-world bpmn resource"
 ```
 
 ---
 
-## Task 11：集成测试——部署 → 启动 → 完成（Testcontainers + MySQL）
+## Task 9：集成测试——deploy → start → complete（Testcontainers MySQL）
 
 **Files:**
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/test/resources/application-test.yml`
-- 创建：`${BPM_HOME}/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/engine/HelloWorldFlowIT.java`
+- 创建 `jeecg-module-bpm-biz/src/test/resources/application-test.yml`
+- 创建 `jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/engine/HelloWorldFlowIT.java`
 
-> **为什么 Testcontainers MySQL 而不是 H2：** Flowable 6.8 不再官方支持 H2（连接 string 报错或表创建脚本不全）。spec §10 已记录此约束。
+> Flowable 6.8 不官方支持 H2 → 必须真 MySQL。Testcontainers 拉 mysql:8.0.27 镜像即可。
 
-- [ ] **Step 1：写测试配置**
+- [ ] **Step 1：测试配置**
 
-`${BPM_HOME}/jeecg-module-bpm-biz/src/test/resources/application-test.yml`：
+`jeecg-module-bpm-biz/src/test/resources/application-test.yml`：
 ```yaml
 flowable:
   database-schema-update: true
   history-level: full
-  async-executor-activate: false   # 测试不需要异步执行器
+  async-executor-activate: false
 spring:
   jpa:
     open-in-view: false
-  quartz:
-    enabled: false
-  cloud:
-    nacos:
-      discovery:
-        enabled: false
-      config:
-        enabled: false
 ```
 
-- [ ] **Step 2：写集成测试**
+- [ ] **Step 2：集成测试**
 
 ```java
 package org.jeecg.modules.bpm.engine;
@@ -976,6 +729,7 @@ import org.flowable.task.api.Task;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
@@ -988,9 +742,8 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(classes = {
-        org.jeecg.modules.bpm.BpmModuleAutoConfiguration.class
-})
+@SpringBootTest(classes = { org.jeecg.modules.bpm.BpmModuleAutoConfiguration.class })
+@ActiveProfiles("test")
 @Testcontainers
 class HelloWorldFlowIT {
 
@@ -1014,19 +767,16 @@ class HelloWorldFlowIT {
 
     @Test
     void deployStartCompleteHelloWorld() {
-        // deploy
         repositoryService.createDeployment()
                 .addClasspathResource("bpm/helloworld.bpmn20.xml")
                 .deploy();
 
-        // start
         Map<String,Object> vars = new HashMap<>();
         vars.put("initiator", "alice");
         ProcessInstance inst = runtimeService.startProcessInstanceByKey("bpm_helloworld", vars);
         assertThat(inst).isNotNull();
         assertThat(inst.isEnded()).isFalse();
 
-        // there should be one user task
         List<Task> tasks = taskService.createTaskQuery()
                 .processInstanceId(inst.getId()).list();
         assertThat(tasks).hasSize(1);
@@ -1034,119 +784,260 @@ class HelloWorldFlowIT {
         assertThat(t.getName()).isEqualTo("Say Hello");
         assertThat(t.getAssignee()).isEqualTo("alice");
 
-        // complete
         taskService.complete(t.getId());
 
-        // should be ended
         ProcessInstance ended = runtimeService.createProcessInstanceQuery()
                 .processInstanceId(inst.getId()).singleResult();
-        assertThat(ended).isNull(); // moved to history
+        assertThat(ended).isNull();
     }
 }
 ```
 
-- [ ] **Step 3：跑测试，看其失败（因 Docker / 配置问题）**
+- [ ] **Step 3：跑测试**
 
 ```bash
-mvn -pl jeecg-module-bpm/jeecg-module-bpm-biz test \
-    -Dtest=HelloWorldFlowIT \
-    -Dspring.profiles.active=test
+source ~/bin/bpm-env.sh
+cd /Users/wuhoujin/Documents/dev/bpm
+mvn -f jeecg-module-bpm/pom.xml -pl jeecg-module-bpm-biz test -Dtest=HelloWorldFlowIT
 ```
 
-第一次跑可能失败原因：
-- Docker daemon 未启动 → 启动 Docker Desktop / colima
-- Maven 没找到 Testcontainers 的 mysql-connector → Task 4 已加 test scope，重跑 `mvn install` 一次
-- application-test.yml 没生效 → 加 `@ActiveProfiles("test")` 注解到测试类（如必要）
+期望：1 test passed（首次运行可能下载 mysql:8.0.27 镜像，~30–60s）。
 
-- [ ] **Step 4：直到测试通过**
+- [ ] **Step 4：常见失败处理**
 
-期望：1 test passed in approximately 30s（首次拉 mysql:8.0.27 镜像可能更慢）。
+| 失败模式 | 解决 |
+|---|---|
+| `Could not find a valid Docker environment` | 启动 Docker Desktop 或 colima |
+| `Timeout starting container` | Docker 资源不足，调大 Docker 内存到 ≥4GB |
+| `LiquibaseException: ... master.changelog` | Flowable 版本问题，确认 6.8.0 |
+| `org.flowable... unsupported database type 'h2'` | 配置漏了，确认 spring.datasource.* 通过 DynamicPropertySource 注入 |
 
 - [ ] **Step 5：commit**
 
 ```bash
-cd /Users/wuhoujin/Documents/dev/bpm
 git add jeecg-module-bpm/jeecg-module-bpm-biz/src/test/resources/application-test.yml \
         jeecg-module-bpm/jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/engine/HelloWorldFlowIT.java
-git commit -m "test(bpm-p0): integration test deploys and runs hello-world flow"
+git commit -m "test(bpm-p0): integration test deploy/start/complete hello-world"
 ```
 
 ---
 
-## Task 12：手工冒烟（在真实 jeecg 主壳里跑 hello-world）
+## Task 10：mvn install 出 jar，验证可用作依赖
 
-**Files:**
-- 不修改任何文件——纯验证步骤
+**Files:** 无新增。验证 `bpm-biz` jar 在本地 m2 仓库就位。
 
-把所有前面任务串起来跑一次端到端，确保 P0 真的就绪。
-
-- [ ] **Step 1：启动 jeecg 主壳**
+- [ ] **Step 1：从根目录全量 install**
 
 ```bash
-cd ${JEECG_HOME}/jeecg-boot-module-system
+source ~/bin/bpm-env.sh
+cd /Users/wuhoujin/Documents/dev/bpm
+mvn -f jeecg-module-bpm/pom.xml clean install -DskipTests
+```
+
+期望：BUILD SUCCESS；3 个 artifact 都装进 m2：
+```bash
+ls ~/.m2/repository/com/iimt/bpm/jeecg-module-bpm{,-api,-biz}/0.1.0-SNAPSHOT/*.jar 2>/dev/null
+ls ~/.m2/repository/com/iimt/bpm/jeecg-module-bpm/0.1.0-SNAPSHOT/*.pom
+```
+
+期望看到 3 个 jar / pom 文件。
+
+- [ ] **Step 2：跑全量测试一次**
+
+```bash
+mvn -f jeecg-module-bpm/pom.xml test
+```
+
+期望：所有测试通过（4 个：BpmModuleContextTest、FlowableConfigTest、BpmHealthControllerTest、HelloWorldFlowIT）。
+
+- [ ] **Step 3：commit（无文件改动则跳过此 step）**
+
+无文件改动；本任务只做验证。
+
+---
+
+## Task 11：在真 jeecg-boot v3.5.5 中冒烟集成
+
+**Files：** 仅修改 `./jeecg-boot/`（本地副本，不入仓库）；**不修改 BPM 仓库内任何文件**。
+
+> **目标：** 证明 bpm-biz jar 能被 jeecg-boot v3.5.5 启动模块直接当依赖使用，启动后 `/bpm/v1/healthz`（带 jwt）能 200。
+
+> **MySQL 准备：** 本机需要一个 MySQL 8.x 实例供 jeecg 用。可以用 Docker：
+> ```bash
+> docker run -d --name jeecg-mysql -e MYSQL_ROOT_PASSWORD=root \
+>     -e MYSQL_DATABASE=jeecg-boot -p 3306:3306 mysql:8.0.27
+> ```
+> 等 30 秒就绪后导入 jeecg-boot/db/jeecgboot-mysql-5.7.sql：
+> ```bash
+> docker exec -i jeecg-mysql mysql -uroot -proot jeecg-boot < jeecg-boot/db/jeecgboot-mysql-5.7.sql
+> ```
+
+- [ ] **Step 1：定位 jeecg-boot 启动模块**
+
+```bash
+ls jeecg-boot/jeecg-boot-module-system/pom.xml jeecg-boot/jeecg-boot-starter*/pom.xml jeecg-boot/jeecg-system-start*/pom.xml 2>&1
+```
+
+期望找到唯一的"启动模块" pom（v3.5.5 一般是 `jeecg-boot-module-system`）。
+
+- [ ] **Step 2：在启动模块 pom 中加 bpm-biz 依赖**
+
+```xml
+<dependency>
+    <groupId>com.iimt.bpm</groupId>
+    <artifactId>jeecg-module-bpm-biz</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
+
+- [ ] **Step 3：在 jeecg-boot 启动模块 application-dev.yml 顶部加入 bpm 配置**
+
+```yaml
+spring:
+  config:
+    import:
+      - classpath:bpm-application.yml
+```
+
+或如果 jeecg 当前使用 `spring.profiles.include`，按其风格调整。
+
+- [ ] **Step 4：在 jeecg-boot ShiroConfig 中放行 bpm 路径**
+
+```bash
+grep -rln 'filterChainDefinitionMap.put' jeecg-boot/ --include='*.java'
+```
+
+打开找到的 `ShiroConfig.java`，在已有 `filterChainDefinitionMap.put("/sys/**", "jwt");` 之类语句旁追加：
+```java
+filterChainDefinitionMap.put("/bpm/v1/**", "jwt");
+```
+
+- [ ] **Step 5：构建 + 启动 jeecg-boot**
+
+```bash
+source ~/bin/bpm-env.sh
+cd jeecg-boot
+mvn -pl jeecg-boot-module-system -am clean install -DskipTests
+cd jeecg-boot-module-system
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-启动日志应当看到：
-- `flowable.engine.impl.ProcessEngineImpl - ProcessEngine default created`
-- 没有任何 ERROR 级别 stack
+期望启动日志看到：
+- `o.flowable.engine.impl.ProcessEngineImpl - ProcessEngine default created`
+- `s.b.w.embedded.tomcat.TomcatWebServer - Tomcat started on port(s): 8080`
+- 没有 ERROR 级别栈
 
-- [ ] **Step 2：登录拿 token**
+- [ ] **Step 6：验证 healthz**
 
 ```bash
-curl -sS -X POST 'http://localhost:8080/jeecg-boot/sys/login' \
+# 不带 token：401
+curl -sS -o /dev/null -w "%{http_code}\n" http://localhost:8080/jeecg-boot/bpm/v1/healthz
+# 期望：401
+
+# 登录拿 token：
+TOKEN=$(curl -sS -X POST 'http://localhost:8080/jeecg-boot/sys/login' \
   -H 'Content-Type: application/json' \
-  --data '{"username":"admin","password":"123456","captcha":"x","checkKey":"y"}'
-```
+  --data '{"username":"admin","password":"123456","captcha":"x","checkKey":"y"}' | jq -r '.result.token')
+echo "TOKEN=$TOKEN"
 
-从返回中取 `result.token`，记为 `$TOKEN`。
-
-- [ ] **Step 3：访问 healthz**
-
-```bash
+# 带 token：
 curl -sS -H "X-Access-Token: $TOKEN" http://localhost:8080/jeecg-boot/bpm/v1/healthz
 ```
 
-期望返回：
+期望最后一条返回：
 ```json
 {"status":"UP","engine":"flowable","version":"6.8.0","name":"default"}
 ```
 
-- [ ] **Step 4：通过 Flowable Java API 部署 hello-world，再用 RepositoryService 查询**
+- [ ] **Step 7：验证 act_* 表已创建**
 
-由于 P0 没做"部署 BPMN"的 HTTP 接口（那是 P1），这一步用一个 Spring Boot CommandLineRunner 临时验证更快——但**不要**把它合并进主分支。
-
-替代方案：**直接验证 act_re_procdef 表里 startup 时是否被 Flowable 自动加载了 classpath:bpm/*.bpmn20.xml**。配置 `flowable.process.definition-locations=classpath:/bpm/*.bpmn20.xml` 或直接走 ServiceTask 让 Flowable 在 startup 自动扫 `processes/` 目录。
-
-**最小化做法：在 BpmHealthController 临时加一个 `POST /bpm/v1/_dev/deploy-hello` 端点**，它调用 `repositoryService.createDeployment().addClasspathResource("bpm/helloworld.bpmn20.xml").deploy()`，然后**在 P1 第一个任务里删除这个 dev endpoint**。本计划暂不写它的代码——P0 验证由 `HelloWorldFlowIT` 集成测试覆盖即足够。
-
-**结论：** Step 4 改为 "确认 act_re_procdef 表存在且为空"：
 ```bash
-mysql -ujeecg -p jeecg-boot -e "SELECT count(*) FROM act_re_procdef;"
+docker exec -it jeecg-mysql mysql -uroot -proot jeecg-boot -e "SHOW TABLES LIKE 'act_%';" | wc -l
 ```
-期望：0（数字本身不重要，能查到表证明引擎和数据库都通）。
 
-- [ ] **Step 5：写 P0 验收清单**
+期望 ≥ 26（25 张 act_* + 表头一行）。
 
-`${BPM_HOME}/P0_DONE.md`：
+- [ ] **Step 8：把 ShiroConfig 改动 + pom 改动写到 INTEGRATION.md 作为参考片段**
+
+更新 `INTEGRATION.md`，把"## 4. 修改启动模块依赖"段下原 placeholder 替换为具体已验证的片段：
+
 ```markdown
-# P0 验收清单 ✅
-
-- [x] jeecg-module-bpm 多模块编译通过
-- [x] BpmModuleAutoConfiguration 被主壳自动加载
-- [x] Flowable 6.8.0 启动，act_* 表（25 张）自动建出
-- [x] /bpm/v1/healthz 不带 token = 401，带 token = 200
-- [x] HelloWorldFlowIT（Testcontainers MySQL）通过
-- [x] 主壳启动日志无 ERROR
-
-## 下一步
-P1：流程定义 CRUD + BPMN 设计器（前端）
+## 4. 修改启动模块依赖
+在 jeecg-boot v3.5.5 的 jeecg-boot-module-system/pom.xml `<dependencies>` 中追加：
+```xml
+<dependency>
+    <groupId>com.iimt.bpm</groupId>
+    <artifactId>jeecg-module-bpm-biz</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
 ```
 
-- [ ] **Step 6：final commit**
+## 5. 配置 Flowable
+在 application-dev.yml 顶部加：
+```yaml
+spring:
+  config:
+    import:
+      - classpath:bpm-application.yml
+```
+
+## 6. 配置 Shiro 放行
+在 ShiroConfig.java 找到 filterChainDefinitionMap 配置，加入：
+```java
+filterChainDefinitionMap.put("/bpm/v1/**", "jwt");
+```
+
+## 7. 准备数据源
+确保 jeecg datasource 指向的 MySQL 8.x 已启动。Flowable 会在首次启动时自动建 act_* 表。
+```
+
+- [ ] **Step 9：commit INTEGRATION.md 更新**
 
 ```bash
 cd /Users/wuhoujin/Documents/dev/bpm
+git add INTEGRATION.md
+git commit -m "docs(bpm-p0): integration steps verified against jeecg-boot v3.5.5"
+```
+
+---
+
+## Task 12：P0 验收清单
+
+**Files：** 创建 `jeecg-module-bpm/P0_DONE.md`
+
+- [ ] **Step 1：写验收清单**
+
+`jeecg-module-bpm/P0_DONE.md`：
+```markdown
+# P0 验收清单 ✅
+
+## 独立性
+- [x] BPM 父 pom parent = `spring-boot-starter-parent 2.7.10`，不继承 `jeecg-boot-parent`
+- [x] `bpm-biz` pom 依赖中无任何 `org.jeecgframework.boot:*` artifact
+- [x] BPM 工程独立 `mvn install` 可发布到本地 m2
+
+## 引擎集成
+- [x] Flowable 6.8.0 在测试中启动成功，act_* 表（25 张）自动创建
+- [x] StrongUuidGenerator 通过单测
+- [x] hello-world BPMN：deploy → start → complete 链路通过 Testcontainers MySQL 验证
+
+## 健康检查
+- [x] `BpmHealthController` 单测通过
+- [x] 真 jeecg-boot v3.5.5 启动后，`/jeecg-boot/bpm/v1/healthz` 不带 token = 401，带 token = 200，返回引擎版本
+
+## 文档
+- [x] INTEGRATION.md 包含已验证的 4 步集成片段（pom/yml/Shiro/数据源）
+- [x] COMPATIBILITY.md 记录工具链与版本决策
+
+## 下一步（P1）
+- 补 `bpm-spi` 接口（BpmUserContext / BpmOrgService / BpmFormService / BpmNotificationSender）
+- 写 `bpm-adapter-jeecg` 实现，让 bpm-biz 通过 SPI 拿用户/部门数据
+- 流程定义 CRUD + 前端 BPMN 设计器
+```
+
+- [ ] **Step 2：commit + push**
+
+```bash
 git add jeecg-module-bpm/P0_DONE.md
 git commit -m "docs(bpm-p0): P0 acceptance checklist"
 git push origin main
@@ -1154,29 +1045,26 @@ git push origin main
 
 ---
 
-## Self-Review Notes（plan 完成度自检）
+## Self-Review Notes
 
-**Spec coverage：**
-- §2 P0（脚手架 + 引擎）→ 由 Task 2~9 全覆盖 ✅
-- §3 模块结构（api/biz 拆分）→ Task 2~4 ✅
-- §3.3 选型（Flowable 6.8）→ Task 4、7 ✅
-- §4.3 Flowable 表配置（schema-update、history-level=full、async-executor）→ Task 7 ✅
-- §6 API（healthz 不在 §6 列表，但属于 §1.3 引擎自检语义）→ Task 9 ✅
-- §10 测试（Testcontainers MySQL）→ Task 11 ✅
-- §13 与 jeecg 耦合点 ShiroConfig/Quartz/RabbitMQ → Task 8 ShiroConfig；Quartz/RabbitMQ 在 P0 不动 ✅
+**spec 覆盖：**
+- §1.2（独立模块原则） → Task 2、4 体现 ✅
+- §3.1（4 模块架构） → Task 0 + 13 已 scaffold api/biz；spi/adapter 在 P1（已声明）✅
+- §3.3（SPI 清单） → P0 暂不引入；明确属于 P1（Q.E.D.：Task 12 P0_DONE 列出）✅
+- §3.4（技术选型 — Flowable 6.8） → Task 4、6、9 ✅
+- §4.3（Flowable 表配置 — schema-update/history/async） → Task 6 ✅
+- §10（Testcontainers MySQL） → Task 9 ✅
 
 **未覆盖（按 P0 范围正确排除）：**
 - BPMN 设计器、流程定义 CRUD、节点人员策略、表单绑定、版本生命周期、监控页面 — 属于 P1~P5
-- 前端 Vue 改动 — 属于 P1+
-- `bpm_*` 业务表 — 属于 P1+
+- 前端 Vue 改动 — P1+
+- `bpm_*` 业务表 — P1+
+- SPI 接口实现与 adapter — P1（首个使用者：AssigneeResolver）
 
-**Placeholder 检查：** 全文 grep "TBD|TODO|FIXME|待补充|待定|稍后" 无命中（Task 12 Step 4 中提到的"P1 第一个任务里删除这个 dev endpoint"是对**未来 plan** 的注记，本身不是占位符）。
+**Placeholder 检查：** 无 TBD/TODO/FIXME/待补充/待定/稍后/未来补 字样。
 
-**类型一致性：** `BpmModuleAutoConfiguration` 在 Task 5 定义，Task 9 测试中引用，名字与包路径一致 ✅；`FlowableConfig` 在 Task 7 定义、测试同名 ✅；`BpmHealthController` 路径 `/bpm/v1/healthz` 在 Task 8、9、12 一致引用 ✅。
-
-**已知不确定项（执行时需即时回填）：**
-1. jeecg-boot 版本对齐结果（Task 1 输出 → 本计划 `${JEECG_HOME}` 即定）
-2. ShiroConfig 类全限定名（Task 8 grep 后即定）
-3. 启动模块 artifactId（`jeecg-boot-module-system` vs `jeecg-system-start`，Task 1 确认）
-
-这些不属于 plan 缺陷——是 jeecg 不同发行版差异，必须靠现场确认。Task 1 的 COMPATIBILITY.md 是正式记录处。
+**类型一致性：**
+- `BpmModuleAutoConfiguration` Task 5 定义、Task 9 测试引用 ✅
+- `FlowableConfig` Task 6 定义、测试同名 ✅
+- `BpmHealthController` Task 7 路径 `/bpm/v1/healthz`，Task 11 真实环境验证同路径 ✅
+- groupId 统一 `com.iimt.bpm`，version `0.1.0-SNAPSHOT` ✅
