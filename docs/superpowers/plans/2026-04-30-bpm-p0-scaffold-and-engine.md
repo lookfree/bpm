@@ -340,8 +340,9 @@ git commit -m "build(bpm-p0): scaffold bpm-api submodule (empty placeholder)"
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>mysql</groupId>
-            <artifactId>mysql-connector-java</artifactId>
+            <!-- Spring Boot 2.7.10 BOM 用新坐标 com.mysql:mysql-connector-j（旧 mysql:mysql-connector-java 未管理） -->
+            <groupId>com.mysql</groupId>
+            <artifactId>mysql-connector-j</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
