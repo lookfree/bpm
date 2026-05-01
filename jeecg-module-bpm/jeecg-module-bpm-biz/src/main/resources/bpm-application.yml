@@ -1,0 +1,5 @@
+flowable:
+  database-schema-update: true        # 首次建 act_* 表；生产改 false
+  history-level: full                 # 任务全量历史
+  async-executor-activate: true       # 异步执行器（用于 timer）
+  check-process-definitions: false    # 不自动加载 classpath 下的 bpmn
