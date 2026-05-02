@@ -3,6 +3,7 @@ package org.jeecg.modules.bpm.adapter.jeecg;
 import org.jeecg.common.system.api.ISysBaseAPI;
 import org.jeecg.common.system.util.JwtUtil;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -17,6 +18,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class JeecgBpmUserContextTest {
+
+    @BeforeEach
+    void resetContext() {
+        RequestContextHolder.resetRequestAttributes();
+    }
 
     @AfterEach
     void clearContext() {
