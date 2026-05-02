@@ -17,3 +17,6 @@
 
 # jeecg-boot 源码副本（仅本地用于联调，不入仓库）
 /jeecg-boot/
+
+# Maven build output
+target/

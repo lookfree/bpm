@@ -563,6 +563,9 @@ git commit -m "feat(bpm-p0): flowable config with uuid id generator + default ym
 - [ ] **Step 1：写测试**
 
 `jeecg-module-bpm-biz/src/test/java/org/jeecg/modules/bpm/controller/BpmHealthControllerTest.java`：
+
+> **注：** 库模块没有 `@SpringBootApplication`，`@WebMvcTest` 找不到 `@SpringBootConfiguration`；用内部 `TestConfig` 显式开 MVC + 扫包是最小可工作模式。
+
 ```java
 package org.jeecg.modules.bpm.controller;
 
@@ -573,15 +576,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(classes = { BpmHealthController.class })
+@SpringBootTest(classes = { BpmHealthControllerTest.TestConfig.class })
 @AutoConfigureMockMvc
 class BpmHealthControllerTest {
+
+    @Configuration
+    @EnableWebMvc
+    @ComponentScan("org.jeecg.modules.bpm.controller")
+    public static class TestConfig {
+    }
 
     @Autowired MockMvc mvc;
 
