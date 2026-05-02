@@ -1,5 +1,10 @@
 # Database dumps (potentially sensitive — add explicitly if needed)
 *.sql
+# Allow DDL scripts that ship as code resources
+!**/src/main/resources/db/*.sql
+!**/src/main/resources/sql/*.sql
+!**/src/test/resources/db/*.sql
+!**/src/test/resources/sql/*.sql
 
 # OS
 .DS_Store
