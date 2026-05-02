@@ -1,8 +1,15 @@
 # BPM 模块集成方法
 
-本仓库交付的是 jeecg-boot 的一个独立 Maven 子模块 `jeecg-module-bpm`，
-不包含 jeecg-boot 主体源码。集成方需自行准备 **jeecg-boot v3.5.5**
-源码，然后按以下步骤接入。
+本仓库交付 jeecg-boot 的一个独立 Maven 子模块 `jeecg-module-bpm`，
+不包含 jeecg-boot 主体源码。集成方需自行准备 **jeecg-boot v3.5.5** 源码，
+按以下步骤接入。本文片段在 P0 阶段已通过本地实际启动 jeecg-boot v3.5.5 验证。
+
+## 前置条件
+
+- JDK 8 或 11
+- Maven 3.6+
+- MySQL 8.x（jeecg 与 BPM 共用同一 schema）
+- Redis 5+（jeecg-boot 自身依赖；BPM 暂不引入额外 Redis 用法）
 
 > 版本核实方法：根据 manage.iimt.org.cn 部署使用的 Spring Boot 2.7.10 +
 > MyBatis-Plus 3.5.3.1 + Shiro 1.12.0 + JWT 3.11.0 + Knife4j 3.0.3 +
@@ -10,28 +17,106 @@
 > 顶层 `pom.xml`，**v3.5.5** 唯一全匹配。
 
 ## 1. 准备 jeecg-boot
+
+```bash
 git clone --depth 1 -b v3.5.5 https://github.com/jeecgboot/jeecg-boot.git
 cd jeecg-boot
+```
 
-## 2. 把本模块放入
-将本仓库 `jeecg-module-bpm/` 整目录拷贝到 jeecg-boot 根目录：
-cp -r /path/to/bpm/jeecg-module-bpm /path/to/jeecg-boot/
+## 2. 把 BPM 模块装入本地 Maven 仓库
 
-## 3. 修改 jeecg-boot 根 pom.xml
-在 <modules> 下新增：
-  <module>jeecg-module-bpm</module>
+在 BPM 仓库内执行：
 
-## 4. 修改启动模块依赖
-在 jeecg-boot-module-system/pom.xml（或 jeecg-system-start/pom.xml，依发行版而定）
-的 <dependencies> 中新增：
-  <dependency>
-    <groupId>org.jeecgframework.boot</groupId>
+```bash
+cd /path/to/bpm/jeecg-module-bpm
+mvn clean install -DskipTests
+```
+
+这会将三件 artifact 安装到 `~/.m2/repository/com/iimt/bpm/`：
+- `jeecg-module-bpm` (parent pom)
+- `jeecg-module-bpm-api`
+- `jeecg-module-bpm-biz`
+
+> BPM 工程独立：parent = `spring-boot-starter-parent 2.7.10`，**不**继承 `jeecg-boot-parent`，依赖里**不**含任何 `org.jeecgframework.boot:*` artifact。
+
+## 3. 在 jeecg-boot 启动模块加 bpm-biz 依赖
+
+v3.5.5 启动模块路径为 `jeecg-module-system/jeecg-system-start`。
+在 `jeecg-module-system/jeecg-system-start/pom.xml` 的 `<dependencies>` 中追加：
+
+```xml
+<!-- BPM 模块（独立 Maven 工程，本地 m2 安装） -->
+<dependency>
+    <groupId>com.iimt.bpm</groupId>
     <artifactId>jeecg-module-bpm-biz</artifactId>
-    <version>${project.version}</version>
-  </dependency>
+    <version>0.1.0-SNAPSHOT</version>
+</dependency>
+```
 
-## 5. 配置数据源 & Flowable
-见 docs/superpowers/plans/2026-04-30-bpm-p0-scaffold-and-engine.md Task 7。
+## 4. 引入 BPM 配置文件
 
-## 6. 配置 Shiro 放行路径
-见 docs/superpowers/plans/2026-04-30-bpm-p0-scaffold-and-engine.md Task 8。
+在 `jeecg-module-system/jeecg-system-start/src/main/resources/application-dev.yml`
+（以及其他 profile yml）顶部 `spring:` 块下加入：
+
+```yaml
+spring:
+  config:
+    import:
+      - classpath:bpm-application.yml
+```
+
+`bpm-application.yml` 由 `jeecg-module-bpm-biz` jar 提供（classpath 根目录），
+内含 Flowable 默认配置：
+- `flowable.database-schema-update: true`（首次启动自动建 act_* 表，生产改 false）
+- `flowable.history-level: full`（任务全量历史）
+- `flowable.async-executor-activate: true`（用于 timer 定时事件）
+- `flowable.check-process-definitions: false`（不自动加载 classpath 下的 bpmn 文件）
+
+## 5. 配置 Shiro 放行
+
+打开 `jeecg-boot-base-core/src/main/java/org/jeecg/config/shiro/ShiroConfig.java`，
+在最末尾的 `filterChainDefinitionMap.put("/**", "jwt");` 之前追加：
+
+```java
+// BPM 模块路径走 jwt 校验
+filterChainDefinitionMap.put("/bpm/v1/**", "jwt");
+```
+
+> 实际上 jeecg 的 `/**` catch-all 已把 `/bpm/v1/**` 纳入 jwt 过滤；显式声明只为可读性。
+
+## 6. 数据源
+
+复用 jeecg 自身的 master 数据源即可，BPM 不引入第二个 DataSource。
+确保 jeecg 配置的 MySQL 8.x 已启动。
+
+Flowable 在首次启动时自动建 25 张 `act_*` 表（在同一 schema 内，与 jeecg 业务表共存）。
+
+## 7. 构建 + 启动 + 验证
+
+```bash
+cd jeecg-boot
+mvn -pl jeecg-module-system/jeecg-system-start -am clean install -DskipTests
+cd jeecg-module-system/jeecg-system-start
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+启动日志期望出现：
+- `o.flowable.engine.impl.ProcessEngineImpl - ProcessEngine default created`
+- `s.b.w.embedded.tomcat.TomcatWebServer - Tomcat started on port(s): 8080`
+
+健康检查：
+```bash
+# 不带 token：401
+curl -sS -o /dev/null -w "%{http_code}\n" http://localhost:8080/jeecg-boot/bpm/v1/healthz
+# 期望：401
+
+# 登录拿 token，再带 token 调用：
+curl -sS -H "X-Access-Token: $TOKEN" http://localhost:8080/jeecg-boot/bpm/v1/healthz
+# 期望：{"status":"UP","engine":"flowable","version":"6.8.0","name":"default"}
+```
+
+验证 act_* 表：
+```bash
+mysql -uroot -proot jeecg-boot -e "SHOW TABLES LIKE 'act_%';" | wc -l
+# 期望 ≥ 26（25 张 act_* + 表头）
+```
