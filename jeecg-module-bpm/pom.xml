@@ -21,6 +21,7 @@
 
     <modules>
         <module>jeecg-module-bpm-api</module>
+        <module>jeecg-module-bpm-spi</module>
         <module>jeecg-module-bpm-biz</module>
     </modules>
 
@@ -51,6 +52,16 @@
                 <version>${testcontainers.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.iimt.bpm</groupId>
+                <artifactId>jeecg-module-bpm-spi</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.iimt.bpm</groupId>
+                <artifactId>jeecg-module-bpm-adapter-jeecg</artifactId>
+                <version>${project.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
