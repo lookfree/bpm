@@ -23,6 +23,7 @@
         <module>jeecg-module-bpm-api</module>
         <module>jeecg-module-bpm-spi</module>
         <module>jeecg-module-bpm-biz</module>
+        <module>jeecg-module-bpm-adapter-jeecg</module>
     </modules>
 
     <properties>
