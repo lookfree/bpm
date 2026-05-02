@@ -5,6 +5,7 @@ import org.jeecg.modules.bpm.definition.dto.DefinitionUpdateRequest;
 import org.jeecg.modules.bpm.definition.dto.DefinitionVO;
 import org.jeecg.modules.bpm.definition.entity.BpmProcessDefinition;
 import org.jeecg.modules.bpm.definition.mapper.BpmProcessDefinitionMapper;
+import org.jeecg.modules.bpm.definition.support.BpmnXmlValidator;
 import org.jeecg.modules.bpm.spi.BpmUserContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +20,8 @@ class BpmProcessDefinitionServiceImplTest {
 
     BpmProcessDefinitionMapper mapper;
     BpmUserContext userContext;
+    BpmProcessDefinitionHistoryService historyService;
+    BpmnXmlValidator bpmnValidator;
     BpmProcessDefinitionServiceImpl svc;
 
     @BeforeEach
@@ -26,7 +29,9 @@ class BpmProcessDefinitionServiceImplTest {
         mapper = mock(BpmProcessDefinitionMapper.class);
         userContext = mock(BpmUserContext.class);
         when(userContext.currentUsername()).thenReturn("alice");
-        svc = new BpmProcessDefinitionServiceImpl(userContext);
+        historyService = mock(BpmProcessDefinitionHistoryService.class);
+        bpmnValidator = mock(BpmnXmlValidator.class);
+        svc = new BpmProcessDefinitionServiceImpl(userContext, historyService, bpmnValidator);
         try {
             java.lang.reflect.Field f = svc.getClass().getSuperclass().getDeclaredField("baseMapper");
             f.setAccessible(true);

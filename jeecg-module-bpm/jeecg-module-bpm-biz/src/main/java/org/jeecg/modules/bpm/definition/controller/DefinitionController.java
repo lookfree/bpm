@@ -2,11 +2,14 @@ package org.jeecg.modules.bpm.definition.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import org.jeecg.modules.bpm.definition.dto.*;
+import org.jeecg.modules.bpm.definition.entity.BpmProcessDefinitionHistory;
 import org.jeecg.modules.bpm.definition.service.BpmProcessDefinitionService;
 import org.jeecg.modules.bpm.definition.support.BpmnXmlValidator;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/bpm/v1/definition")
@@ -57,6 +60,17 @@ public class DefinitionController {
     public ResponseEntity<Void> delete(@PathVariable String id) {
         service.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/publish")
+    public DefinitionVO publish(@PathVariable String id,
+                                @RequestParam(required = false) String changeNote) {
+        return service.publish(id, changeNote);
+    }
+
+    @GetMapping("/{id}/versions")
+    public List<BpmProcessDefinitionHistory> versions(@PathVariable String id) {
+        return service.versions(id);
     }
 
     @ExceptionHandler(BpmnXmlValidator.InvalidBpmnException.class)

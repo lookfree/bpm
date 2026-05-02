@@ -6,11 +6,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.jeecg.modules.bpm.definition.dto.*;
 import org.jeecg.modules.bpm.definition.entity.BpmProcessDefinition;
+import org.jeecg.modules.bpm.definition.entity.BpmProcessDefinitionHistory;
 import org.jeecg.modules.bpm.definition.mapper.BpmProcessDefinitionMapper;
+import org.jeecg.modules.bpm.definition.support.BpmnXmlValidator;
 import org.jeecg.modules.bpm.spi.BpmUserContext;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.List;
 
 @Service
 public class BpmProcessDefinitionServiceImpl
@@ -18,9 +22,15 @@ public class BpmProcessDefinitionServiceImpl
         implements BpmProcessDefinitionService {
 
     private final BpmUserContext userContext;
+    private final BpmProcessDefinitionHistoryService historyService;
+    private final BpmnXmlValidator bpmnValidator;
 
-    public BpmProcessDefinitionServiceImpl(BpmUserContext userContext) {
+    public BpmProcessDefinitionServiceImpl(BpmUserContext userContext,
+                                           BpmProcessDefinitionHistoryService historyService,
+                                           BpmnXmlValidator bpmnValidator) {
         this.userContext = userContext;
+        this.historyService = historyService;
+        this.bpmnValidator = bpmnValidator;
     }
 
     @Override
@@ -86,6 +96,30 @@ public class BpmProcessDefinitionServiceImpl
         if ("PUBLISHED".equals(e.getState()))
             throw new IllegalStateException("cannot delete PUBLISHED definition; archive first");
         removeById(id);
+    }
+
+    @Override
+    @Transactional
+    public DefinitionVO publish(String id, String changeNote) {
+        BpmProcessDefinition e = getById(id);
+        if (e == null) throw new IllegalArgumentException("definition not found: " + id);
+        if (!"DRAFT".equals(e.getState()))
+            throw new IllegalStateException("only DRAFT can be published in P1; current=" + e.getState());
+        if (e.getBpmnXml() == null || e.getBpmnXml().isEmpty())
+            throw new IllegalStateException("bpmn_xml is empty");
+        bpmnValidator.validate(e.getBpmnXml());
+
+        e.setState("PUBLISHED");
+        e.setUpdateBy(userContext.currentUsername());
+        updateById(e);
+        historyService.snapshot(e.getId(), e.getDefKey(), e.getVersion(),
+                e.getBpmnXml(), changeNote, userContext.currentUsername());
+        return toVODetail(e);
+    }
+
+    @Override
+    public List<BpmProcessDefinitionHistory> versions(String id) {
+        return historyService.listByDefId(id);
     }
 
     private DefinitionVO toVOWithoutXml(BpmProcessDefinition e) {
