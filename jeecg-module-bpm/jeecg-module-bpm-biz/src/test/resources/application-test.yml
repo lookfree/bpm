@@ -1,0 +1,7 @@
+flowable:
+  database-schema-update: true
+  history-level: full
+  async-executor-activate: false
+spring:
+  jpa:
+    open-in-view: false

@@ -30,7 +30,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <flowable.version>6.8.0</flowable.version>
-        <testcontainers.version>1.19.3</testcontainers.version>
+        <testcontainers.version>1.21.3</testcontainers.version>
     </properties>
 
     <dependencyManagement>
