@@ -21,6 +21,17 @@
             <groupId>com.iimt.bpm</groupId>
             <artifactId>jeecg-module-bpm-api</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.iimt.bpm</groupId>
+            <artifactId>jeecg-module-bpm-spi</artifactId>
+        </dependency>
+
+        <!-- MyBatis-Plus -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-boot-starter</artifactId>
+            <version>3.5.3.1</version>
+        </dependency>
 
         <!-- Spring Boot Web（非可选 — Controller 需要）-->
         <dependency>

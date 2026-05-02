@@ -3,3 +3,19 @@ flowable:
   history-level: full                 # 任务全量历史
   async-executor-activate: true       # 异步执行器（用于 timer）
   check-process-definitions: false    # 不自动加载 classpath 下的 bpmn
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.nologging.NoLoggingImpl
+  global-config:
+    db-config:
+      id-type: ASSIGN_UUID
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+  mapper-locations: classpath*:mapper/**/*.xml
+
+bpm:
+  schema:
+    auto-init: true                 # P1 默认开；生产可关
