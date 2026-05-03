@@ -1,6 +1,7 @@
 package org.jeecg.modules.bpm.service.task;
 
 import org.flowable.engine.HistoryService;
+import org.flowable.engine.history.HistoricProcessInstanceQuery;
 import org.flowable.task.api.Task;
 import org.flowable.task.api.TaskQuery;
 import org.jeecg.modules.bpm.domain.entity.InstanceMeta;
@@ -43,6 +44,11 @@ class BpmTaskServiceTest {
         when(tq.taskId("t1")).thenReturn(tq);
         when(tq.singleResult()).thenReturn(task);
         when(instMapper.selectOne(any())).thenReturn(null);
+        HistoricProcessInstanceQuery hpiq = mock(HistoricProcessInstanceQuery.class);
+        when(histSvc.createHistoricProcessInstanceQuery()).thenReturn(hpiq);
+        when(hpiq.processInstanceId(any())).thenReturn(hpiq);
+        when(hpiq.finished()).thenReturn(hpiq);
+        when(hpiq.count()).thenReturn(0L);
 
         svc.complete("t1", "APPROVE", "looks good", Map.of("field1", "val1"));
 

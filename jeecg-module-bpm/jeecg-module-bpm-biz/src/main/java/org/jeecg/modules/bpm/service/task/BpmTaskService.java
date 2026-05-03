@@ -80,6 +80,17 @@ public class BpmTaskService {
                 new LambdaQueryWrapper<InstanceMeta>()
                         .eq(InstanceMeta::getActInstId, task.getProcessInstanceId()));
 
+        // Check if process instance finished, update meta state
+        boolean finished = historyService.createHistoricProcessInstanceQuery()
+                .processInstanceId(task.getProcessInstanceId())
+                .finished()
+                .count() > 0;
+        if (finished && meta != null) {
+            meta.setState("COMPLETED");
+            meta.setEndTime(java.time.LocalDateTime.now());
+            instanceMetaMapper.updateById(meta);
+        }
+
         String instId = meta != null ? meta.getId() : task.getProcessInstanceId();
         historyWriter.write(new TaskHistoryWriter.Entry(
                 taskId, instId, task.getTaskDefinitionKey(),

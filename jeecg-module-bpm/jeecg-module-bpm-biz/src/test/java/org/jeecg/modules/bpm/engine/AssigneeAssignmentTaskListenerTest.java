@@ -2,6 +2,7 @@ package org.jeecg.modules.bpm.engine;
 
 import org.flowable.task.service.delegate.DelegateTask;
 import org.jeecg.modules.bpm.domain.entity.NodeConfig;
+import org.jeecg.modules.bpm.mapper.InstanceMetaMapper;
 import org.jeecg.modules.bpm.service.assignee.AssigneeResolver;
 import org.jeecg.modules.bpm.service.nodecfg.NodeConfigService;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,8 @@ class AssigneeAssignmentTaskListenerTest {
 
     NodeConfigService nodeCfg = mock(NodeConfigService.class);
     AssigneeResolver resolver = mock(AssigneeResolver.class);
-    AssigneeAssignmentTaskListener listener = new AssigneeAssignmentTaskListener(nodeCfg, resolver);
+    InstanceMetaMapper instanceMetaMapper = mock(InstanceMetaMapper.class);
+    AssigneeAssignmentTaskListener listener = new AssigneeAssignmentTaskListener(nodeCfg, resolver, instanceMetaMapper);
 
     @Test
     void singleCandidateBecomesAssignee() {

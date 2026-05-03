@@ -8,6 +8,7 @@ import org.jeecg.modules.bpm.spi.BpmUserContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -18,6 +19,7 @@ class BpmAdapterJeecgAutoConfigurationTest {
     void registersAllFourSpiBeans() {
         new ApplicationContextRunner()
                 .withBean(ISysBaseAPI.class, () -> mock(ISysBaseAPI.class))
+                .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
                 .withConfiguration(AutoConfigurations.of(BpmAdapterJeecgAutoConfiguration.class))
                 .run(ctx -> {
                     assertThat(ctx).hasSingleBean(BpmUserContext.class);

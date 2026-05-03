@@ -1,8 +1,11 @@
 package org.jeecg.modules.bpm.engine;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.flowable.task.service.delegate.DelegateTask;
 import org.flowable.task.service.delegate.TaskListener;
+import org.jeecg.modules.bpm.domain.entity.InstanceMeta;
 import org.jeecg.modules.bpm.domain.entity.NodeConfig;
+import org.jeecg.modules.bpm.mapper.InstanceMetaMapper;
 import org.jeecg.modules.bpm.service.assignee.AssigneeResolver;
 import org.jeecg.modules.bpm.service.assignee.ResolveContext;
 import org.jeecg.modules.bpm.service.nodecfg.NodeConfigService;
@@ -21,15 +24,19 @@ public class AssigneeAssignmentTaskListener implements TaskListener {
 
     private final NodeConfigService nodeCfg;
     private final AssigneeResolver resolver;
+    private final InstanceMetaMapper instanceMetaMapper;
 
-    public AssigneeAssignmentTaskListener(NodeConfigService nodeCfg, AssigneeResolver resolver) {
+    public AssigneeAssignmentTaskListener(NodeConfigService nodeCfg, AssigneeResolver resolver,
+                                          InstanceMetaMapper instanceMetaMapper) {
         this.nodeCfg = nodeCfg;
         this.resolver = resolver;
+        this.instanceMetaMapper = instanceMetaMapper;
     }
 
     @Override
     public void notify(DelegateTask task) {
-        String defId = task.getProcessDefinitionId();
+        // Look up custom defId via InstanceMeta; fallback to Flowable process definition ID
+        String defId = resolveCustomDefId(task.getProcessInstanceId(), task.getProcessDefinitionId());
         String nodeId = task.getTaskDefinitionKey();
         Optional<NodeConfig> cfgOpt = nodeCfg.findByActDefAndNode(defId, nodeId);
         if (!cfgOpt.isPresent() || cfgOpt.get().getAssigneeStrategy() == null) return;
@@ -55,6 +62,14 @@ public class AssigneeAssignmentTaskListener implements TaskListener {
                 task.addCandidateUser(String.valueOf(uid));
             }
         }
+    }
+
+    private String resolveCustomDefId(String procInstId, String fallback) {
+        if (procInstId == null) return fallback;
+        InstanceMeta meta = instanceMetaMapper.selectOne(
+                new LambdaQueryWrapper<InstanceMeta>()
+                        .eq(InstanceMeta::getActInstId, procInstId));
+        return (meta != null && meta.getDefId() != null) ? meta.getDefId() : fallback;
     }
 
     @SuppressWarnings("unchecked")

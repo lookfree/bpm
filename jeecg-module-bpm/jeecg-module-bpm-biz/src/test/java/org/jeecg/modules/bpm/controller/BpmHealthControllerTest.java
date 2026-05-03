@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
@@ -16,13 +17,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest(classes = { BpmHealthControllerTest.TestConfig.class })
+@SpringBootTest(classes = { BpmHealthControllerTest.TestConfig.class },
+        properties = "spring.main.allow-bean-definition-overriding=true")
 @AutoConfigureMockMvc
 class BpmHealthControllerTest {
 
     @Configuration
     @EnableWebMvc
-    @ComponentScan("org.jeecg.modules.bpm.controller")
+    @ComponentScan(
+            basePackageClasses = BpmHealthController.class,
+            useDefaultFilters = false,
+            includeFilters = @ComponentScan.Filter(
+                    type = FilterType.ASSIGNABLE_TYPE,
+                    classes = BpmHealthController.class))
     public static class TestConfig {
     }
 

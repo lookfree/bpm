@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://iimt.com/bpm/test"
+             id="defs_apply_approve">
+    <process id="apply_approve" name="申请-审批" isExecutable="true">
+        <startEvent id="start"/>
+        <sequenceFlow id="f1" sourceRef="start" targetRef="apply"/>
+        <userTask id="apply" name="填写申请"/>
+        <sequenceFlow id="f2" sourceRef="apply" targetRef="approve"/>
+        <userTask id="approve" name="审批"/>
+        <sequenceFlow id="f3" sourceRef="approve" targetRef="end"/>
+        <endEvent id="end"/>
+    </process>
+</definitions>
