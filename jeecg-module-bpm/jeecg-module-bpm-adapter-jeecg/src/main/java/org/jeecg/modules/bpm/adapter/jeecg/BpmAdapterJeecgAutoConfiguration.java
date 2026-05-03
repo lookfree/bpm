@@ -22,14 +22,14 @@ public class BpmAdapterJeecgAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(BpmOrgService.class)
-    public BpmOrgService bpmOrgService() {
-        return new NoopBpmOrgService();
+    public BpmOrgService bpmOrgService(org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
+        return new BpmOrgServiceJeecgImpl(jdbcTemplate);
     }
 
     @Bean
     @ConditionalOnMissingBean(BpmFormService.class)
-    public BpmFormService bpmFormService() {
-        return new NoopBpmFormService();
+    public BpmFormService bpmFormService(org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
+        return new BpmFormServiceJeecgImpl(jdbcTemplate);
     }
 
     @Bean
