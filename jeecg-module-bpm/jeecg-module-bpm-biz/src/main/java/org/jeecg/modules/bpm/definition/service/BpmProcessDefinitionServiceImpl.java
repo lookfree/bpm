@@ -9,12 +9,18 @@ import org.jeecg.modules.bpm.definition.entity.BpmProcessDefinition;
 import org.jeecg.modules.bpm.definition.entity.BpmProcessDefinitionHistory;
 import org.jeecg.modules.bpm.definition.mapper.BpmProcessDefinitionMapper;
 import org.jeecg.modules.bpm.definition.support.BpmnXmlValidator;
+import org.jeecg.modules.bpm.domain.entity.NodeConfig;
+import org.jeecg.modules.bpm.mapper.NodeConfigMapper;
+import org.jeecg.modules.bpm.multi.MultiInstanceXmlRewriter;
+import org.jeecg.modules.bpm.multi.MultiModeConfig;
 import org.jeecg.modules.bpm.spi.BpmUserContext;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class BpmProcessDefinitionServiceImpl
@@ -24,13 +30,22 @@ public class BpmProcessDefinitionServiceImpl
     private final BpmUserContext userContext;
     private final BpmProcessDefinitionHistoryService historyService;
     private final BpmnXmlValidator bpmnValidator;
+    private final org.flowable.engine.RepositoryService repositoryService;
+    private final MultiInstanceXmlRewriter multiInstanceXmlRewriter;
+    private final NodeConfigMapper nodeConfigMapper;
 
     public BpmProcessDefinitionServiceImpl(BpmUserContext userContext,
                                            BpmProcessDefinitionHistoryService historyService,
-                                           BpmnXmlValidator bpmnValidator) {
+                                           BpmnXmlValidator bpmnValidator,
+                                           org.flowable.engine.RepositoryService repositoryService,
+                                           MultiInstanceXmlRewriter multiInstanceXmlRewriter,
+                                           NodeConfigMapper nodeConfigMapper) {
         this.userContext = userContext;
         this.historyService = historyService;
         this.bpmnValidator = bpmnValidator;
+        this.repositoryService = repositoryService;
+        this.multiInstanceXmlRewriter = multiInstanceXmlRewriter;
+        this.nodeConfigMapper = nodeConfigMapper;
     }
 
     @Override
@@ -108,6 +123,32 @@ public class BpmProcessDefinitionServiceImpl
         if (e.getBpmnXml() == null || e.getBpmnXml().isEmpty())
             throw new IllegalStateException("bpmn_xml is empty");
         bpmnValidator.validate(e.getBpmnXml());
+
+        // Build multi-instance config map from node configs
+        Map<String, MultiModeConfig> miMap = new HashMap<>();
+        LambdaQueryWrapper<NodeConfig> q = new LambdaQueryWrapper<>();
+        q.eq(NodeConfig::getDefId, id);
+        nodeConfigMapper.selectList(q).stream()
+                .filter(nc -> nc.getMultiMode() != null && !nc.getMultiMode().isBlank())
+                .forEach(nc -> miMap.put(nc.getNodeId(), new MultiModeConfig(nc.getMultiMode())));
+
+        String deployXml = multiInstanceXmlRewriter.rewrite(e.getBpmnXml(), miMap);
+
+        // Deploy to Flowable
+        org.flowable.engine.repository.Deployment deployment = repositoryService.createDeployment()
+                .name(e.getName())
+                .key(e.getDefKey())
+                .addString(e.getDefKey() + ".bpmn20.xml", deployXml)
+                .deploy();
+
+        // Store the Flowable process definition ID
+        org.flowable.engine.repository.ProcessDefinition pd = repositoryService
+                .createProcessDefinitionQuery()
+                .deploymentId(deployment.getId())
+                .singleResult();
+        if (pd != null) {
+            e.setActDefId(pd.getId());
+        }
 
         e.setState("PUBLISHED");
         e.setUpdateBy(userContext.currentUsername());

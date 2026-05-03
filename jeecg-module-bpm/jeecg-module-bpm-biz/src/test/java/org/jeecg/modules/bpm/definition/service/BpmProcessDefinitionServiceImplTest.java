@@ -6,10 +6,15 @@ import org.jeecg.modules.bpm.definition.dto.DefinitionVO;
 import org.jeecg.modules.bpm.definition.entity.BpmProcessDefinition;
 import org.jeecg.modules.bpm.definition.mapper.BpmProcessDefinitionMapper;
 import org.jeecg.modules.bpm.definition.support.BpmnXmlValidator;
+import org.jeecg.modules.bpm.mapper.NodeConfigMapper;
+import org.jeecg.modules.bpm.multi.MultiInstanceXmlRewriter;
 import org.jeecg.modules.bpm.spi.BpmUserContext;
+import org.flowable.engine.RepositoryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+
+import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,6 +27,9 @@ class BpmProcessDefinitionServiceImplTest {
     BpmUserContext userContext;
     BpmProcessDefinitionHistoryService historyService;
     BpmnXmlValidator bpmnValidator;
+    RepositoryService repositoryService;
+    MultiInstanceXmlRewriter multiInstanceXmlRewriter;
+    NodeConfigMapper nodeConfigMapper;
     BpmProcessDefinitionServiceImpl svc;
 
     @BeforeEach
@@ -31,7 +39,12 @@ class BpmProcessDefinitionServiceImplTest {
         when(userContext.currentUsername()).thenReturn("alice");
         historyService = mock(BpmProcessDefinitionHistoryService.class);
         bpmnValidator = mock(BpmnXmlValidator.class);
-        svc = new BpmProcessDefinitionServiceImpl(userContext, historyService, bpmnValidator);
+        repositoryService = mock(RepositoryService.class);
+        multiInstanceXmlRewriter = mock(MultiInstanceXmlRewriter.class);
+        nodeConfigMapper = mock(NodeConfigMapper.class);
+        when(nodeConfigMapper.selectList(any())).thenReturn(Collections.emptyList());
+        svc = new BpmProcessDefinitionServiceImpl(userContext, historyService, bpmnValidator,
+                repositoryService, multiInstanceXmlRewriter, nodeConfigMapper);
         try {
             java.lang.reflect.Field f = svc.getClass().getSuperclass().getDeclaredField("baseMapper");
             f.setAccessible(true);
