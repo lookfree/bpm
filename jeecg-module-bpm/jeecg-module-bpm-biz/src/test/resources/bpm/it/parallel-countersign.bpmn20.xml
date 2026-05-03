@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             targetNamespace="http://iimt.com/bpm/it" id="defs_pc">
+  <process id="bpm_parallel_cs" isExecutable="true">
+    <startEvent id="s"/>
+    <sequenceFlow id="f1" sourceRef="s" targetRef="t"/>
+    <userTask id="t" name="Approve"/>
+    <sequenceFlow id="f2" sourceRef="t" targetRef="e"/>
+    <endEvent id="e"/>
+  </process>
+</definitions>

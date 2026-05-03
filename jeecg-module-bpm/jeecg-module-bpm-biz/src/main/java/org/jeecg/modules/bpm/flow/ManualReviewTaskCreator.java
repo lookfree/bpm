@@ -2,6 +2,7 @@ package org.jeecg.modules.bpm.flow;
 
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 /**
@@ -13,7 +14,7 @@ public class ManualReviewTaskCreator {
 
     private final TaskService taskService;
 
-    public ManualReviewTaskCreator(TaskService taskService) {
+    public ManualReviewTaskCreator(@Lazy TaskService taskService) {
         this.taskService = taskService;
     }
 
