@@ -7,9 +7,11 @@ import org.flowable.common.engine.api.delegate.event.FlowableEngineEntityEvent;
 import org.flowable.spring.SpringProcessEngineConfiguration;
 import org.flowable.spring.boot.EngineConfigurationConfigurer;
 import org.flowable.task.service.delegate.DelegateTask;
+import org.jeecg.modules.bpm.flow.NoMatchingFlowHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -20,7 +22,8 @@ public class FlowableEventListenerRegistrar {
 
     @Bean
     public EngineConfigurationConfigurer<SpringProcessEngineConfiguration> bpmTaskListenerRegistrar(
-            AssigneeAssignmentTaskListener assigneeListener) {
+            AssigneeAssignmentTaskListener assigneeListener,
+            NoMatchingFlowHandler noMatchingFlowHandler) {
         return cfg -> {
             FlowableEventListener wrapper = new FlowableEventListener() {
                 @Override
@@ -51,6 +54,8 @@ public class FlowableEventListenerRegistrar {
 
             Map<String, List<FlowableEventListener>> map = new HashMap<>();
             map.put(FlowableEngineEventType.TASK_CREATED.name(), Collections.singletonList(wrapper));
+            map.put(FlowableEngineEventType.JOB_EXECUTION_FAILURE.name(),
+                    Collections.singletonList(noMatchingFlowHandler));
             cfg.setTypedEventListeners(map);
         };
     }
