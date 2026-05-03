@@ -5,6 +5,7 @@
 !**/src/main/resources/sql/*.sql
 !**/src/test/resources/db/*.sql
 !**/src/test/resources/sql/*.sql
+!**/db/menu/*.sql
 
 # OS
 .DS_Store
