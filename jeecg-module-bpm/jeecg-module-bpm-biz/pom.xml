@@ -47,6 +47,13 @@
             <artifactId>flowable-spring-boot-starter-process</artifactId>
         </dependency>
 
+        <!-- AviatorScript expression engine -->
+        <dependency>
+            <groupId>com.googlecode.aviator</groupId>
+            <artifactId>aviator</artifactId>
+            <version>5.4.3</version>
+        </dependency>
+
         <!-- 测试 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
