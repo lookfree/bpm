@@ -1,5 +1,7 @@
 package org.jeecg.modules.bpm.service.assignee;
 
+import org.jeecg.modules.bpm.expression.BpmExpressionContextBuilder;
+import org.jeecg.modules.bpm.expression.BpmExpressionEvaluator;
 import org.jeecg.modules.bpm.service.assignee.impl.FixedUserStrategy;
 import org.jeecg.modules.bpm.service.assignee.impl.RoleStrategy;
 import org.jeecg.modules.bpm.service.assignee.impl.ScriptStrategy;
@@ -12,6 +14,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class AssigneeResolverTest {
@@ -23,7 +26,9 @@ class AssigneeResolverTest {
         Map<String, AssigneeStrategy> map = new HashMap<>();
         FixedUserStrategy fixed = new FixedUserStrategy();
         RoleStrategy role = new RoleStrategy(org);
-        ScriptStrategy script = new ScriptStrategy();
+        BpmExpressionEvaluator evaluator = mock(BpmExpressionEvaluator.class);
+        BpmExpressionContextBuilder ctxBuilder = mock(BpmExpressionContextBuilder.class);
+        ScriptStrategy script = new ScriptStrategy(evaluator, ctxBuilder);
         map.put(fixed.type(), fixed);
         map.put(role.type(), role);
         map.put(script.type(), script);
