@@ -32,3 +32,27 @@ git commit -m "feat(bpm-p1): bpmn-js 17 designer wrapper + designer page"
 ```
 
 `/@/api/bpm/definition` API module is created in Task 11 (Definition list page).
+
+---
+
+## Task 11 additions — Definition list + API layer + routes
+
+All files mirror the corresponding paths under `$VUE_REPO/src/`:
+
+```
+src/api/bpm/model/definitionModel.ts   — TypeScript types (DefinitionVO, PageResult<T>, VersionVO, …)
+src/api/bpm/definition.ts              — HTTP helpers (listDefinitions, getDefinition, createDefinition,
+                                          updateDefinition, deleteDefinition, publishDefinition, listVersions)
+src/views/bpm/definition/
+  DefinitionList.data.ts               — STATE_OPTIONS + VxeTable columns config
+  DefinitionList.vue                   — List page with filter bar, vxe-table, pagination, VersionsModal
+  components/VersionsModal.vue         — a-modal showing listVersions rows
+src/router/routes/modules/bpm.ts       — AppRouteModule: /bpm → BpmDefinition + BpmDesigner children
+```
+
+### Routes registered
+
+| name | path | notes |
+|------|------|-------|
+| `BpmDefinition` | `/bpm/definition` | main list page |
+| `BpmDesigner` | `/bpm/designer` | `hideMenu: true`, `currentActiveMenu: '/bpm/definition'` |
