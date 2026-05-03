@@ -36,4 +36,14 @@ public class BpmProcessDefinitionHistoryServiceImpl
          .orderByDesc(BpmProcessDefinitionHistory::getVersion);
         return list(q);
     }
+
+    @Override
+    public Integer maxVersion(String defId) {
+        return baseMapper.selectMaxVersion(defId);
+    }
+
+    @Override
+    public BpmProcessDefinitionHistory getByVersion(String defId, Integer version) {
+        return baseMapper.selectByDefIdAndVersion(defId, version);
+    }
 }

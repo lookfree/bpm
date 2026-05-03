@@ -11,4 +11,8 @@ public interface BpmProcessDefinitionHistoryService extends IService<BpmProcessD
                     String changeNote, String publishedBy);
 
     List<BpmProcessDefinitionHistory> listByDefId(String defId);
+
+    Integer maxVersion(String defId);
+
+    BpmProcessDefinitionHistory getByVersion(String defId, Integer version);
 }

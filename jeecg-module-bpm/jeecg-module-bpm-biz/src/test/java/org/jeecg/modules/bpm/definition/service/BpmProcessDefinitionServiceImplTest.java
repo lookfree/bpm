@@ -1,9 +1,11 @@
 package org.jeecg.modules.bpm.definition.service;
 
+import org.jeecg.modules.bpm.definition.DefinitionLifecycleService;
 import org.jeecg.modules.bpm.definition.dto.DefinitionCreateRequest;
 import org.jeecg.modules.bpm.definition.dto.DefinitionUpdateRequest;
 import org.jeecg.modules.bpm.definition.dto.DefinitionVO;
 import org.jeecg.modules.bpm.definition.entity.BpmProcessDefinition;
+import org.jeecg.modules.bpm.definition.mapper.BpmProcessDefinitionHistoryMapper;
 import org.jeecg.modules.bpm.definition.mapper.BpmProcessDefinitionMapper;
 import org.jeecg.modules.bpm.definition.support.BpmnXmlValidator;
 import org.jeecg.modules.bpm.mapper.NodeConfigMapper;
@@ -44,7 +46,8 @@ class BpmProcessDefinitionServiceImplTest {
         nodeConfigMapper = mock(NodeConfigMapper.class);
         when(nodeConfigMapper.selectList(any())).thenReturn(Collections.emptyList());
         svc = new BpmProcessDefinitionServiceImpl(userContext, historyService, bpmnValidator,
-                repositoryService, multiInstanceXmlRewriter, nodeConfigMapper);
+                repositoryService, multiInstanceXmlRewriter, nodeConfigMapper,
+                new DefinitionLifecycleService(), mock(BpmProcessDefinitionHistoryMapper.class));
         try {
             java.lang.reflect.Field f = svc.getClass().getSuperclass().getDeclaredField("baseMapper");
             f.setAccessible(true);
