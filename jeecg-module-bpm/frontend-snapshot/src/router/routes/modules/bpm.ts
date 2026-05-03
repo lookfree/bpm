@@ -20,6 +20,36 @@ const bpm: AppRouteModule = {
       component: () => import('/@/views/bpm/designer/DesignerPage.vue'),
       meta: { title: '流程设计器', hideMenu: true, currentActiveMenu: '/bpm/definition' },
     },
+    {
+      path: 'todo',
+      name: 'BpmTodo',
+      component: () => import('/@/views/bpm/task/TodoListPage.vue'),
+      meta: { title: '我的待办' },
+    },
+    {
+      path: 'done',
+      name: 'BpmDone',
+      component: () => import('/@/views/bpm/task/DoneListPage.vue'),
+      meta: { title: '我的已办' },
+    },
+    {
+      path: 'task/approve/:taskId',
+      name: 'BpmTaskApprove',
+      component: () => import('/@/views/bpm/task/TaskApprovePage.vue'),
+      meta: { hideMenu: true },
+    },
+    {
+      path: 'instance/start/:defId',
+      name: 'BpmInstanceStart',
+      component: () => import('/@/views/bpm/instance/InstanceStartPage.vue'),
+      meta: { hideMenu: true },
+    },
+    {
+      path: 'form-binding',
+      name: 'BpmFormBinding',
+      component: () => import('/@/views/bpm/form-binding/FormBindingPage.vue'),
+      meta: { title: '表单绑定' },
+    },
   ],
 };
 export default bpm;
