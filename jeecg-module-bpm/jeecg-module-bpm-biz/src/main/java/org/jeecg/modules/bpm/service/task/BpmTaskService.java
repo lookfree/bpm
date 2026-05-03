@@ -64,11 +64,49 @@ public class BpmTaskService {
     }
 
     public void complete(String taskId, String action, String comment, Map<String, Object> formData) {
-        if (!"APPROVE".equals(action) && !"REJECT".equals(action)) {
-            throw new IllegalArgumentException("unsupported_action_in_p2: " + action);
-        }
+        complete(taskId, action, comment, null, formData);
+    }
+
+    public void complete(String taskId, String action, String comment, String targetUserId, Map<String, Object> formData) {
         Task task = flowableTaskService.createTaskQuery().taskId(taskId).singleResult();
         if (task == null) throw new IllegalArgumentException("task not found: " + taskId);
+
+        if ("TRANSFER".equals(action)) {
+            String assignee = (targetUserId != null && !targetUserId.isEmpty()) ? targetUserId : "";
+            flowableTaskService.setAssignee(taskId, assignee);
+
+            InstanceMeta meta = instanceMetaMapper.selectOne(
+                    new LambdaQueryWrapper<InstanceMeta>()
+                            .eq(InstanceMeta::getActInstId, task.getProcessInstanceId()));
+            String instId = meta != null ? meta.getId() : task.getProcessInstanceId();
+            historyWriter.write(new TaskHistoryWriter.Entry(
+                    taskId, instId, task.getTaskDefinitionKey(),
+                    userContext.currentUserId(), "TRANSFER", comment, null));
+            return;
+        }
+
+        if ("COUNTERSIGN".equals(action)) {
+            String assignee = (targetUserId != null && !targetUserId.isEmpty()) ? targetUserId : "";
+            org.flowable.task.api.Task sub = flowableTaskService.newTask();
+            sub.setName(task.getName() + "（加签）");
+            sub.setAssignee(assignee);
+            sub.setParentTaskId(taskId);
+            sub.setOwner(String.valueOf(userContext.currentUserId()));
+            flowableTaskService.saveTask(sub);
+
+            InstanceMeta meta = instanceMetaMapper.selectOne(
+                    new LambdaQueryWrapper<InstanceMeta>()
+                            .eq(InstanceMeta::getActInstId, task.getProcessInstanceId()));
+            String instId = meta != null ? meta.getId() : task.getProcessInstanceId();
+            historyWriter.write(new TaskHistoryWriter.Entry(
+                    taskId, instId, task.getTaskDefinitionKey(),
+                    userContext.currentUserId(), "COUNTERSIGN", comment, null));
+            return;
+        }
+
+        if (!"APPROVE".equals(action) && !"REJECT".equals(action)) {
+            throw new IllegalArgumentException("unsupported_action: " + action);
+        }
 
         Map<String, Object> vars = new HashMap<>();
         if (formData != null) vars.putAll(formData);

@@ -34,16 +34,21 @@ class BpmTaskServiceTest {
     BpmTaskService svc = new BpmTaskService(
             flowableTs, histSvc, userCtx, histWriter, instMapper, fbMapper, nodeCfg, merger, formSvc);
 
-    @Test void completeApproveCallsFlowableAndWritesHistory() {
-        when(userCtx.currentUserId()).thenReturn(5L);
+    private Task setupTaskMock(String taskId, String procInstId, String nodeId) {
         Task task = mock(Task.class);
-        when(task.getProcessInstanceId()).thenReturn("pi1");
-        when(task.getTaskDefinitionKey()).thenReturn("node1");
+        when(task.getProcessInstanceId()).thenReturn(procInstId);
+        when(task.getTaskDefinitionKey()).thenReturn(nodeId);
         TaskQuery tq = mock(TaskQuery.class);
         when(flowableTs.createTaskQuery()).thenReturn(tq);
-        when(tq.taskId("t1")).thenReturn(tq);
+        when(tq.taskId(taskId)).thenReturn(tq);
         when(tq.singleResult()).thenReturn(task);
         when(instMapper.selectOne(any())).thenReturn(null);
+        return task;
+    }
+
+    @Test void completeApproveCallsFlowableAndWritesHistory() {
+        when(userCtx.currentUserId()).thenReturn(5L);
+        setupTaskMock("t1", "pi1", "node1");
         HistoricProcessInstanceQuery hpiq = mock(HistoricProcessInstanceQuery.class);
         when(histSvc.createHistoricProcessInstanceQuery()).thenReturn(hpiq);
         when(hpiq.processInstanceId(any())).thenReturn(hpiq);
@@ -57,9 +62,47 @@ class BpmTaskServiceTest {
     }
 
     @Test void completeUnsupportedActionThrows() {
-        assertThatThrownBy(() -> svc.complete("t1", "TRANSFER", null, null))
+        Task task = mock(Task.class);
+        when(task.getProcessInstanceId()).thenReturn("pi1");
+        when(task.getTaskDefinitionKey()).thenReturn("node1");
+        TaskQuery tq = mock(TaskQuery.class);
+        when(flowableTs.createTaskQuery()).thenReturn(tq);
+        when(tq.taskId("t1")).thenReturn(tq);
+        when(tq.singleResult()).thenReturn(task);
+
+        assertThatThrownBy(() -> svc.complete("t1", "UNKNOWN", null, null, null))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("unsupported_action_in_p2");
-        verifyNoInteractions(flowableTs);
+                .hasMessageContaining("unsupported_action");
+        verify(flowableTs, never()).complete(any(), any());
+    }
+
+    @Test void transferReassignsTaskWithoutAdvancing() {
+        when(userCtx.currentUserId()).thenReturn(5L);
+        setupTaskMock("t1", "pi1", "node1");
+
+        svc.complete("t1", "TRANSFER", "please handle", "u_b", null);
+
+        verify(flowableTs).setAssignee("t1", "u_b");
+        verify(flowableTs, never()).complete(any(), any());
+        verify(histWriter).write(argThat(e -> "TRANSFER".equals(e.getAction())));
+    }
+
+    @Test void countersignCreatesSubTask() {
+        when(userCtx.currentUserId()).thenReturn(5L);
+        Task parentTask = setupTaskMock("t1", "pi1", "node1");
+        when(parentTask.getName()).thenReturn("审批");
+
+        Task subTask = mock(Task.class);
+        when(flowableTs.newTask()).thenReturn(subTask);
+
+        svc.complete("t1", "COUNTERSIGN", "add signer", "u_c", null);
+
+        verify(subTask).setName("审批（加签）");
+        verify(subTask).setAssignee("u_c");
+        verify(subTask).setParentTaskId("t1");
+        verify(subTask).setOwner("5");
+        verify(flowableTs).saveTask(subTask);
+        verify(flowableTs, never()).complete(any(), any());
+        verify(histWriter).write(argThat(e -> "COUNTERSIGN".equals(e.getAction())));
     }
 }

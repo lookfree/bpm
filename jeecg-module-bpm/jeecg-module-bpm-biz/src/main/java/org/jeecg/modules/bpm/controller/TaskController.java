@@ -30,10 +30,11 @@ public class TaskController {
     public ResponseEntity<?> complete(@PathVariable String id, @RequestBody Map<String, Object> body) {
         String action = (String) body.get("action");
         String comment = (String) body.get("comment");
+        String targetUserId = (String) body.get("targetUserId");
         @SuppressWarnings("unchecked")
         Map<String, Object> formData = (Map<String, Object>) body.get("formData");
         try {
-            taskService.complete(id, action, comment, formData);
+            taskService.complete(id, action, comment, targetUserId, formData);
             return ResponseEntity.ok(Map.of("status", "ok"));
         } catch (IllegalArgumentException e) {
             if (e.getMessage() != null && e.getMessage().startsWith("unsupported_action")) {
