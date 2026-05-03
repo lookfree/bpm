@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             targetNamespace="http://iimt.com/bpm/it"
+             id="defs_amount_branch">
+  <process id="bpm_amount_branch" name="Amount Branch" isExecutable="true">
+    <startEvent id="start"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="gw"/>
+    <exclusiveGateway id="gw" default="f_default"/>
+    <sequenceFlow id="f_high" sourceRef="gw" targetRef="task_high">
+      <conditionExpression xsi:type="tFormalExpression">${aviatorEval.eval(execution, 'form.amount > 10000')}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="f_default" sourceRef="gw" targetRef="task_normal"/>
+    <userTask id="task_high"   name="High Approval"   flowable:assignee="${initiator}"/>
+    <userTask id="task_normal" name="Normal Approval" flowable:assignee="${initiator}"/>
+    <sequenceFlow id="fh_end" sourceRef="task_high"   targetRef="end"/>
+    <sequenceFlow id="fn_end" sourceRef="task_normal" targetRef="end"/>
+    <endEvent id="end"/>
+  </process>
+</definitions>

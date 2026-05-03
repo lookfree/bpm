@@ -3,6 +3,7 @@ package org.jeecg.modules.bpm.expression;
 import org.jeecg.modules.bpm.spi.BpmFormService;
 import org.jeecg.modules.bpm.spi.BpmOrgService;
 import org.jeecg.modules.bpm.spi.BpmUserContext;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
@@ -21,6 +22,7 @@ public class BpmExpressionContextBuilder {
     private final BpmFormService formSvc;
     private final Clock clock;
 
+    @Autowired
     public BpmExpressionContextBuilder(BpmUserContext userCtx, BpmOrgService orgSvc,
                                        BpmFormService formSvc) {
         this(userCtx, orgSvc, formSvc, Clock.systemDefaultZone());
