@@ -19,3 +19,5 @@ mybatis-plus:
 bpm:
   schema:
     auto-init: true                 # P1 默认开；生产可关
+  lock:
+    enabled: true

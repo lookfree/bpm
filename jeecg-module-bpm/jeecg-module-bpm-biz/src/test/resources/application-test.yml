@@ -7,3 +7,7 @@ spring:
     open-in-view: false
   main:
     allow-bean-definition-overriding: true
+
+bpm:
+  lock:
+    enabled: false
