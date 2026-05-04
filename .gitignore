@@ -2,6 +2,7 @@
 *.sql
 # Allow DDL scripts that ship as code resources
 !**/src/main/resources/db/*.sql
+!**/src/main/resources/db/**/*.sql
 !**/src/main/resources/sql/*.sql
 !**/src/test/resources/db/*.sql
 !**/src/test/resources/sql/*.sql

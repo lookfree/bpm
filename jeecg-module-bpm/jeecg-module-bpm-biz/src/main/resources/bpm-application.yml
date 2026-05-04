@@ -21,3 +21,11 @@ bpm:
     auto-init: true                 # P1 默认开；生产可关
   lock:
     enabled: true
+  scheduler:
+    timeout:
+      enabled: true
+      cron: "0 */5 * * * ?"
+    history-cleanup:
+      enabled: true
+      cron: "0 0 3 * * ?"
+      retention-days: 180
