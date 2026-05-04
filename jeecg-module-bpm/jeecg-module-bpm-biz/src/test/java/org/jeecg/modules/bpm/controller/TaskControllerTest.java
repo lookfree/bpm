@@ -44,7 +44,7 @@ class TaskControllerTest {
     }
 
     @Test void completeApproveReturnsOk() throws Exception {
-        doNothing().when(taskService).complete(eq("t1"), eq("APPROVE"), any(), any());
+        doNothing().when(taskService).complete(eq("t1"), eq("APPROVE"), any(), any(), any());
         mvc.perform(post("/bpm/v1/task/t1/complete")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"action\":\"APPROVE\",\"comment\":\"ok\"}"))
@@ -52,11 +52,11 @@ class TaskControllerTest {
     }
 
     @Test void completeUnsupportedActionReturns400() throws Exception {
-        doThrow(new IllegalArgumentException("unsupported_action_in_p2: TRANSFER"))
-                .when(taskService).complete(eq("t1"), eq("TRANSFER"), any(), any());
+        doThrow(new IllegalArgumentException("unsupported_action: UNKNOWN"))
+                .when(taskService).complete(eq("t1"), eq("UNKNOWN"), any(), any(), any());
         mvc.perform(post("/bpm/v1/task/t1/complete")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"action\":\"TRANSFER\"}"))
+                .content("{\"action\":\"UNKNOWN\"}"))
            .andExpect(status().isBadRequest());
     }
 }
