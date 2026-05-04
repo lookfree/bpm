@@ -109,3 +109,21 @@ CREATE TABLE IF NOT EXISTS `bpm_task_history` (
   KEY `idx_bpm_task_history_inst` (`inst_id`),
   KEY `idx_bpm_task_history_assignee` (`assignee_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='BPM 任务审批历史（幂等：act_task_id + action 唯一）';
+
+-- ============================================================
+-- P4: category index + sandbox run table
+-- ============================================================
+
+CREATE INDEX IF NOT EXISTS idx_def_category_state ON bpm_process_definition (category, state);
+
+CREATE TABLE IF NOT EXISTS `bpm_sandbox_run` (
+    `id`           BIGINT PRIMARY KEY AUTO_INCREMENT,
+    `def_id_draft` VARCHAR(64) NOT NULL,
+    `runner_id`    BIGINT NOT NULL,
+    `result`       VARCHAR(16) NOT NULL DEFAULT 'RUNNING',
+    `log`          MEDIUMTEXT NULL,
+    `start_time`   DATETIME NOT NULL,
+    `end_time`     DATETIME NULL,
+    INDEX `idx_sandbox_def` (`def_id_draft`),
+    INDEX `idx_sandbox_runner` (`runner_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='BPM 沙箱运行记录';
