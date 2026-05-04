@@ -114,7 +114,7 @@ CREATE TABLE IF NOT EXISTS `bpm_task_history` (
 -- P4: category index + sandbox run table
 -- ============================================================
 
-CREATE INDEX IF NOT EXISTS idx_def_category_state ON bpm_process_definition (category, state);
+CREATE INDEX idx_def_category_state ON bpm_process_definition (category, state);
 
 CREATE TABLE IF NOT EXISTS `bpm_sandbox_run` (
     `id`           BIGINT PRIMARY KEY AUTO_INCREMENT,

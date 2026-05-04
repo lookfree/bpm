@@ -67,6 +67,12 @@ class DefinitionControllerPublishIT {
         String id = body.get("id").asText();
         assertThat(body.get("state").asText()).isEqualTo("DRAFT");
 
+        // Two-step publish: DRAFT → TESTING → PUBLISHED
+        mvc.perform(post("/bpm/v1/definition/" + id + "/publish")
+                .param("changeNote", "first publish"))
+           .andExpect(status().isOk())
+           .andExpect(jsonPath("$.state").value("TESTING"));
+
         mvc.perform(post("/bpm/v1/definition/" + id + "/publish")
                 .param("changeNote", "first publish"))
            .andExpect(status().isOk())
@@ -88,7 +94,10 @@ class DefinitionControllerPublishIT {
                 .content(om.writeValueAsString(req)))
                 .andExpect(status().isCreated()).andReturn();
         String id = om.readTree(res.getResponse().getContentAsString()).get("id").asText();
+        // Two-step publish: DRAFT → TESTING → PUBLISHED
         mvc.perform(post("/bpm/v1/definition/" + id + "/publish")).andExpect(status().isOk());
+        mvc.perform(post("/bpm/v1/definition/" + id + "/publish")).andExpect(status().isOk());
+        // Now PUBLISHED — further publish must be rejected
         mvc.perform(post("/bpm/v1/definition/" + id + "/publish"))
            .andExpect(status().isConflict());
     }

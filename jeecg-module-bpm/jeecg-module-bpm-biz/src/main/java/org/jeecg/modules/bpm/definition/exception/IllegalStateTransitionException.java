@@ -1,6 +1,6 @@
 package org.jeecg.modules.bpm.definition.exception;
 
-public class IllegalStateTransitionException extends RuntimeException {
+public class IllegalStateTransitionException extends IllegalStateException {
     private final String from;
     private final String to;
 

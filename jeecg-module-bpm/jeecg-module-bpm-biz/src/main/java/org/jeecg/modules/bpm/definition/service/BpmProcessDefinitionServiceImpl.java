@@ -78,7 +78,7 @@ public class BpmProcessDefinitionServiceImpl
         BeanUtils.copyProperties(req, e);
         e.setVersion(1);
         e.setState("DRAFT");
-        if (e.getCategory() == null) e.setCategory("PROD");
+        if (e.getCategory() == null) e.setCategory("DEFAULT");
         e.setTenantId("default");
         String username = userContext.currentUsername();
         e.setCreateBy(username);

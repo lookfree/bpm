@@ -46,7 +46,23 @@ public class BpmSchemaInitializer {
             Arrays.stream(stripped.split(";"))
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
-                    .forEach(jdbcTemplate::execute);
+                    .forEach(sql -> {
+                        try {
+                            jdbcTemplate.execute(sql);
+                        } catch (org.springframework.dao.DataAccessException e) {
+                            // Tolerate "duplicate key name" (MySQL error 1061) for index creation
+                            // and "Duplicate column" (1060) — idempotent re-runs
+                            Throwable cause = e.getCause();
+                            if (cause instanceof java.sql.SQLException) {
+                                int code = ((java.sql.SQLException) cause).getErrorCode();
+                                if (code == 1061 /* ER_DUP_KEYNAME */ || code == 1060 /* ER_DUP_FIELDNAME */) {
+                                    LOG.debug("[bpm-schema] tolerated idempotent: {}", e.getMessage());
+                                    return;
+                                }
+                            }
+                            throw e;
+                        }
+                    });
             LOG.info("[bpm-schema] init complete");
         } catch (Exception ex) {
             LOG.error("[bpm-schema] init FAILED", ex);
