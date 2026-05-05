@@ -56,6 +56,12 @@ const bpm: AppRouteModule = {
       component: () => import('/@/views/bpm/monitor/ProcessMonitor.vue'),
       meta: { title: '流程监控' },
     },
+    {
+      path: 'stats',
+      name: 'BpmStats',
+      component: () => import('/@/views/bpm/monitor/StatsDashboard.vue'),
+      meta: { title: '统计分析' },
+    },
   ],
 };
 export default bpm;

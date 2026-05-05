@@ -1,6 +1,7 @@
 package org.jeecg.modules.bpm.monitor.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.jeecg.modules.bpm.monitor.service.InstanceInterventionService;
 import org.jeecg.modules.bpm.monitor.service.MonitorQueryService;
 import org.jeecg.modules.bpm.monitor.service.MonitorStatsService;
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,7 @@ class MonitorControllerTest {
     @Autowired MockMvc mvc;
     @MockBean MonitorQueryService queryService;
     @MockBean MonitorStatsService statsService;
+    @MockBean InstanceInterventionService interventionService;
 
     @Test
     void instancesReturnsPageResult() throws Exception {
