@@ -51,7 +51,16 @@ v3.5.5 启动模块路径为 `jeecg-module-system/jeecg-system-start`。
     <artifactId>jeecg-module-bpm-biz</artifactId>
     <version>0.1.0-SNAPSHOT</version>
 </dependency>
+<!-- Redisson: BPM 分布式锁所需，jeecg-boot 不自带，需显式声明 -->
+<dependency>
+    <groupId>org.redisson</groupId>
+    <artifactId>redisson</artifactId>
+    <version>3.23.5</version>
+</dependency>
 ```
+
+> Redisson 在 bpm-biz 中是 `optional` 依赖（避免强制引入），因此部署模块需在此显式声明。
+> 仅引入 `redisson`（非 `redisson-spring-boot-starter`）以避免 Redisson 接管 Spring 的 Redis 自动配置，与 jeecg-boot 自身的 Lettuce/Jedis 共存。
 
 ## 4. 引入 BPM 配置文件
 
@@ -89,11 +98,16 @@ filterChainDefinitionMap.put("/bpm/v1/**", "jwt");
 复用 jeecg 自身的 master 数据源即可，BPM 不引入第二个 DataSource。
 确保 jeecg 配置的 MySQL 8.x 已启动。
 
-Flowable 在首次启动时自动建 25 张 `act_*` 表（在同一 schema 内，与 jeecg 业务表共存）。
+Flowable 在首次启动时自动建 38 张 `ACT_*` 表（在同一 schema 内，与 jeecg 业务表共存）。
 
 ## 7. 构建 + 启动 + 验证
 
+> **Java 版本**：jeecg-boot v3.5.5 依赖 Lombok，需 JDK 8 或 11 构建。JDK 17+ 因 Lombok 注解处理变更会导致构建失败。
+
 ```bash
+# 若系统默认 JDK >= 17，需指定 JDK 11：
+export JAVA_HOME=/path/to/jdk11
+
 cd jeecg-boot
 mvn -pl jeecg-module-system/jeecg-system-start -am clean install -DskipTests
 cd jeecg-module-system/jeecg-system-start
@@ -103,10 +117,14 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 启动日志期望出现：
 - `o.flowable.engine.impl.ProcessEngineImpl - ProcessEngine default created`
 - `s.b.w.embedded.tomcat.TomcatWebServer - Tomcat started on port(s): 8080`
+- 启动时间约 9–12 秒（含 Flowable 引擎初始化）
+
+> **Mapper 重复注册 WARN**：若 jeecg-boot 根 `@MapperScan` 扫描了 BPM 包，启动时会出现
+> `Skipping MapperFactoryBean ... Bean already defined with the same name` 警告，属正常现象，不影响功能。
 
 健康检查：
 ```bash
-# 不带 token：401
+# 不带 token：401（证明 BPM 路由已注册）
 curl -sS -o /dev/null -w "%{http_code}\n" http://localhost:8080/jeecg-boot/bpm/v1/healthz
 # 期望：401
 
@@ -115,8 +133,29 @@ curl -sS -H "X-Access-Token: $TOKEN" http://localhost:8080/jeecg-boot/bpm/v1/hea
 # 期望：{"status":"UP","engine":"flowable","version":"6.8.0","name":"default"}
 ```
 
-验证 act_* 表：
+验证 ACT_* 表：
 ```bash
-mysql -uroot -proot jeecg-boot -e "SHOW TABLES LIKE 'act_%';" | wc -l
-# 期望 ≥ 26（25 张 act_* + 表头）
+mysql -uroot -proot jeecg-boot -e "SHOW TABLES LIKE 'ACT_%';" | wc -l
+# 期望 ≥ 38（Flowable 6.8.0 含 event-registry 引擎）
 ```
+
+## 8. P5 监控运维模块补充配置
+
+P5 监控运维模块新增了调度任务（超时检查 + 历史清理），默认配置：
+
+```yaml
+# bpm-application.yml 已包含以下默认值，无需额外配置
+bpm:
+  scheduler:
+    timeout:
+      cron: "0 */5 * * * ?"    # 每 5 分钟扫超时任务
+    history-cleanup:
+      cron: "0 0 3 * * ?"       # 每天凌晨 3 点清历史
+      retentionDays: 90         # 保留 90 天
+```
+
+P5 新增 API 路径：
+- `GET /bpm/v1/monitor/instances` — 流程实例监控列表（分页 + 过滤）
+- `GET /bpm/v1/monitor/instances/{id}/diagram` — 流程图 XML + 活跃节点
+- `GET /bpm/v1/monitor/stats` — 统计聚合（按定义/节点/部门/趋势）
+- `POST /bpm/v1/monitor/instances/{id}/intervene` — 强制干预（完成/取消/改派）
