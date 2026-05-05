@@ -8,7 +8,8 @@ import org.springframework.context.annotation.Configuration;
 @ComponentScan(basePackages = "org.jeecg.modules.bpm")
 @MapperScan(basePackages = {
         "org.jeecg.modules.bpm.**.mapper",
-        "org.jeecg.modules.bpm.sandbox"
+        "org.jeecg.modules.bpm.sandbox",
+        "org.jeecg.modules.bpm.scheduler.cleanup"
 })
 public class BpmModuleAutoConfiguration {
 }
