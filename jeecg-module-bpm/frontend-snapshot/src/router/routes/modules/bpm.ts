@@ -50,6 +50,12 @@ const bpm: AppRouteModule = {
       component: () => import('/@/views/bpm/form-binding/FormBindingPage.vue'),
       meta: { title: '表单绑定' },
     },
+    {
+      path: 'monitor',
+      name: 'BpmMonitor',
+      component: () => import('/@/views/bpm/monitor/ProcessMonitor.vue'),
+      meta: { title: '流程监控' },
+    },
   ],
 };
 export default bpm;
