@@ -1,5 +1,6 @@
 package org.jeecg.modules.bpm.monitor.controller;
 
+import org.jeecg.modules.bpm.monitor.dto.InstanceDiagramVO;
 import org.jeecg.modules.bpm.monitor.dto.MonitorInstanceQuery;
 import org.jeecg.modules.bpm.monitor.dto.StatsQuery;
 import org.jeecg.modules.bpm.monitor.dto.StatsResponse;
@@ -25,6 +26,11 @@ public class MonitorController {
     @GetMapping("/instances")
     public Map<String, Object> instances(MonitorInstanceQuery query) {
         return queryService.listInstances(query);
+    }
+
+    @GetMapping("/instances/{id}/diagram")
+    public InstanceDiagramVO diagram(@PathVariable String id) {
+        return queryService.getDiagram(id);
     }
 
     @GetMapping("/stats")

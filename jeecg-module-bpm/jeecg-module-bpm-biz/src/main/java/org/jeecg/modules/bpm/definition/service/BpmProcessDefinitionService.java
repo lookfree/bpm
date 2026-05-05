@@ -23,4 +23,7 @@ public interface BpmProcessDefinitionService extends IService<BpmProcessDefiniti
     DefinitionVO publish(String id, String changeNote);
 
     List<BpmProcessDefinitionHistory> versions(String id);
+
+    /** Load bpmnXml for a given defId and version (reads from history snapshot). */
+    String loadBpmnXml(String defId, Integer defVersion);
 }

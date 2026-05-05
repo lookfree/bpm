@@ -1,8 +1,11 @@
 package org.jeecg.modules.bpm.monitor.service;
 
+import org.flowable.engine.RuntimeService;
+import org.jeecg.modules.bpm.definition.service.BpmProcessDefinitionService;
 import org.jeecg.modules.bpm.monitor.dto.MonitorInstanceQuery;
 import org.jeecg.modules.bpm.monitor.dto.MonitorInstanceVO;
 import org.jeecg.modules.bpm.monitor.mapper.MonitorMapper;
+import org.jeecg.modules.bpm.service.instance.InstanceService;
 import org.jeecg.modules.bpm.spi.BpmOrgService;
 import org.junit.jupiter.api.Test;
 
@@ -16,6 +19,13 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class MonitorQueryServiceTest {
+
+    private MonitorQueryService buildSvc(MonitorMapper mapper, BpmOrgService org) {
+        return new MonitorQueryService(mapper, org,
+                mock(InstanceService.class),
+                mock(BpmProcessDefinitionService.class),
+                mock(RuntimeService.class));
+    }
 
     @Test
     void listInstancesEnrichesWithUserAndDeptNames() {
@@ -33,9 +43,7 @@ class MonitorQueryServiceTest {
         when(org.findUserName(7L)).thenReturn("alice");
         when(org.findDeptName(3L)).thenReturn("研发部");
 
-        MonitorQueryService svc = new MonitorQueryService(mapper, org);
-        MonitorInstanceQuery q = new MonitorInstanceQuery();
-        Map<String, Object> page = svc.listInstances(q);
+        Map<String, Object> page = buildSvc(mapper, org).listInstances(new MonitorInstanceQuery());
 
         assertThat(page.get("total")).isEqualTo(1L);
         @SuppressWarnings("unchecked")
@@ -52,9 +60,7 @@ class MonitorQueryServiceTest {
         when(mapper.selectInstances(any(), eq(0), eq(20))).thenReturn(Collections.emptyList());
         when(mapper.countInstances(any())).thenReturn(0L);
 
-        MonitorQueryService svc = new MonitorQueryService(mapper, org);
-        MonitorInstanceQuery q = new MonitorInstanceQuery();
-        Map<String, Object> page = svc.listInstances(q);
+        Map<String, Object> page = buildSvc(mapper, org).listInstances(new MonitorInstanceQuery());
 
         assertThat(page.get("pageSize")).isEqualTo(20);
         assertThat(page.get("pageNo")).isEqualTo(1);
@@ -71,8 +77,7 @@ class MonitorQueryServiceTest {
                 .thenReturn(Collections.singletonList(row));
         when(mapper.countInstances(any())).thenReturn(1L);
 
-        MonitorQueryService svc = new MonitorQueryService(mapper, org);
-        svc.listInstances(new MonitorInstanceQuery());
+        buildSvc(mapper, org).listInstances(new MonitorInstanceQuery());
 
         verify(org, never()).findUserName(any());
         verify(org, never()).findDeptName(any());

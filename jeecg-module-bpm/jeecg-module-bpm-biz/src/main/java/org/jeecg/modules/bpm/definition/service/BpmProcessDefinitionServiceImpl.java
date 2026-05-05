@@ -183,6 +183,16 @@ public class BpmProcessDefinitionServiceImpl
         return historyService.listByDefId(id);
     }
 
+    @Override
+    public String loadBpmnXml(String defId, Integer defVersion) {
+        if (defVersion != null) {
+            BpmProcessDefinitionHistory hist = historyMapper.selectByDefIdAndVersion(defId, defVersion);
+            if (hist != null) return hist.getBpmnXml();
+        }
+        BpmProcessDefinition e = getById(defId);
+        return e != null ? e.getBpmnXml() : null;
+    }
+
     private DefinitionVO toVOWithoutXml(BpmProcessDefinition e) {
         DefinitionVO v = new DefinitionVO();
         BeanUtils.copyProperties(e, v);
