@@ -27,6 +27,9 @@ public class NoOpSpiConfiguration {
             @Override public List<Long> findUsersByRole(String roleCode) { return Collections.emptyList(); }
             @Override public List<Long> findUsersByPosition(String positionCode) { return Collections.emptyList(); }
             @Override public boolean isUserActive(Long userId) { return true; }
+            @Override public String findUserName(Long userId) { return null; }
+            @Override public String findDeptName(Long deptId) { return null; }
+            @Override public Long findUserMainDeptId(Long userId) { return null; }
         };
     }
 

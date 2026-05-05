@@ -57,4 +57,26 @@ public class BpmOrgServiceJeecgImpl implements BpmOrgService {
                 Integer.class, userId);
         return cnt != null && cnt > 0;
     }
+
+    @Override
+    public String findUserName(Long userId) {
+        List<String> names = jdbc.queryForList(
+                "SELECT realname FROM sys_user WHERE id = ?", String.class, userId);
+        return names.isEmpty() ? null : names.get(0);
+    }
+
+    @Override
+    public String findDeptName(Long deptId) {
+        List<String> names = jdbc.queryForList(
+                "SELECT depart_name FROM sys_depart WHERE id = ?", String.class, deptId);
+        return names.isEmpty() ? null : names.get(0);
+    }
+
+    @Override
+    public Long findUserMainDeptId(Long userId) {
+        List<Long> depts = jdbc.queryForList(
+                "SELECT dept_id FROM sys_user_depart WHERE user_id = ? LIMIT 1",
+                Long.class, userId);
+        return depts.isEmpty() ? null : depts.get(0);
+    }
 }

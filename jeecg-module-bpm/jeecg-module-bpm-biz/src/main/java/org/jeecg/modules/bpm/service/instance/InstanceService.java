@@ -10,6 +10,7 @@ import org.jeecg.modules.bpm.spi.BpmFormService;
 import org.jeecg.modules.bpm.spi.BpmUserContext;
 import org.springframework.stereotype.Service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.Map;
@@ -70,5 +71,17 @@ public class InstanceService {
 
     public InstanceMeta getById(String instanceId) {
         return instanceMetaMapper.selectById(instanceId);
+    }
+
+    public InstanceMeta findMeta(String instanceMetaId) {
+        return instanceMetaMapper.selectById(instanceMetaId);
+    }
+
+    public void markCancelled(String instanceMetaId) {
+        InstanceMeta meta = instanceMetaMapper.selectById(instanceMetaId);
+        if (meta == null) return;
+        meta.setState("CANCELLED");
+        meta.setEndTime(LocalDateTime.now());
+        instanceMetaMapper.updateById(meta);
     }
 }

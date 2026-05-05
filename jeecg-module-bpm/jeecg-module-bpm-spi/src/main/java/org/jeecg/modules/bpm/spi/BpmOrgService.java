@@ -17,4 +17,13 @@ public interface BpmOrgService {
 
     /** 用户是否存在且启用 */
     boolean isUserActive(Long userId);
+
+    /** 按 userId 取展示名（姓名）；找不到返回 null */
+    String findUserName(Long userId);
+
+    /** 按 deptId 取部门名称；找不到返回 null */
+    String findDeptName(Long deptId);
+
+    /** 取用户主部门 id；找不到返回 null */
+    Long findUserMainDeptId(Long userId);
 }

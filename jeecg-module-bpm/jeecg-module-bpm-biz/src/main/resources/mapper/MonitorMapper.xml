@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="org.jeecg.modules.bpm.monitor.mapper.MonitorMapper">
+
+    <select id="selectInstances" resultType="org.jeecg.modules.bpm.monitor.dto.MonitorInstanceVO">
+        SELECT
+            m.id AS id, m.act_inst_id AS actInstId,
+            pd.def_key AS defKey, pd.name AS defName,
+            m.def_version AS defVersion, m.business_key AS businessKey,
+            m.apply_user_id AS applyUserId, m.apply_dept_id AS applyDeptId,
+            m.state AS state, m.start_time AS startTime, m.end_time AS endTime
+        FROM bpm_instance_meta m
+        LEFT JOIN bpm_process_definition pd ON pd.id = m.def_id
+        <where>
+            <if test="q.defKey != null and q.defKey != ''">AND pd.def_key = #{q.defKey}</if>
+            <if test="q.defVersion != null">AND m.def_version = #{q.defVersion}</if>
+            <if test="q.applyDeptId != null">AND m.apply_dept_id = #{q.applyDeptId}</if>
+            <if test="q.applyUserId != null">AND m.apply_user_id = #{q.applyUserId}</if>
+            <if test="q.state != null and q.state != ''">AND m.state = #{q.state}</if>
+            <if test="q.startTimeFrom != null">AND m.start_time &gt;= #{q.startTimeFrom}</if>
+            <if test="q.startTimeTo != null">AND m.start_time &lt;= #{q.startTimeTo}</if>
+        </where>
+        ORDER BY m.start_time DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="countInstances" resultType="long">
+        SELECT COUNT(1)
+        FROM bpm_instance_meta m
+        LEFT JOIN bpm_process_definition pd ON pd.id = m.def_id
+        <where>
+            <if test="q.defKey != null and q.defKey != ''">AND pd.def_key = #{q.defKey}</if>
+            <if test="q.defVersion != null">AND m.def_version = #{q.defVersion}</if>
+            <if test="q.applyDeptId != null">AND m.apply_dept_id = #{q.applyDeptId}</if>
+            <if test="q.applyUserId != null">AND m.apply_user_id = #{q.applyUserId}</if>
+            <if test="q.state != null and q.state != ''">AND m.state = #{q.state}</if>
+            <if test="q.startTimeFrom != null">AND m.start_time &gt;= #{q.startTimeFrom}</if>
+            <if test="q.startTimeTo != null">AND m.start_time &lt;= #{q.startTimeTo}</if>
+        </where>
+    </select>
+
+    <select id="selectStatsByDefinition" resultType="org.jeecg.modules.bpm.monitor.dto.StatsByDefinitionRow">
+        SELECT
+            pd.def_key           AS defKey,
+            pd.name              AS defName,
+            COUNT(m.id)          AS instanceCount,
+            SUM(CASE WHEN m.state = 'COMPLETED' THEN 1 ELSE 0 END) AS completedCount,
+            SUM(CASE WHEN ovd.inst_id IS NOT NULL THEN 1 ELSE 0 END) AS overdueCount,
+            AVG(CASE WHEN m.state = 'COMPLETED' THEN hpi.duration_ ELSE NULL END) AS avgDurationMs
+        FROM bpm_instance_meta m
+        LEFT JOIN bpm_process_definition pd ON pd.id = m.def_id
+        LEFT JOIN act_hi_procinst hpi       ON hpi.id_ = m.act_inst_id
+        LEFT JOIN (
+            SELECT DISTINCT hti.proc_inst_id_ AS inst_id
+            FROM act_hi_taskinst hti
+            JOIN bpm_node_config nc ON nc.def_id = hti.proc_def_id_ AND nc.node_id = hti.task_def_key_
+            WHERE hti.duration_ &gt; nc.timeout_hours * 3600 * 1000
+        ) ovd ON ovd.inst_id = m.act_inst_id
+        WHERE m.state &lt;&gt; 'SANDBOX'
+        <if test="q.defKey != null and q.defKey != ''">AND pd.def_key = #{q.defKey}</if>
+        <if test="q.startTimeFrom != null">AND m.start_time &gt;= #{q.startTimeFrom}</if>
+        <if test="q.startTimeTo != null">AND m.start_time &lt;= #{q.startTimeTo}</if>
+        GROUP BY pd.def_key, pd.name
+        ORDER BY instanceCount DESC
+        LIMIT 200
+    </select>
+
+    <select id="selectStatsByNode" resultType="org.jeecg.modules.bpm.monitor.dto.StatsByNodeRow">
+        SELECT
+            pd.def_key AS defKey, hti.task_def_key_ AS nodeId, MAX(hti.name_) AS nodeName,
+            COUNT(1) AS taskCount,
+            AVG(hti.duration_) AS avgDurationMs,
+            SUM(CASE WHEN nc.timeout_hours IS NOT NULL
+                     AND hti.duration_ &gt; nc.timeout_hours * 3600 * 1000
+                     THEN 1 ELSE 0 END) AS overdueCount
+        FROM act_hi_taskinst hti
+        JOIN bpm_instance_meta m ON m.act_inst_id = hti.proc_inst_id_
+        JOIN bpm_process_definition pd ON pd.id = m.def_id
+        LEFT JOIN bpm_node_config nc ON nc.def_id = m.def_id AND nc.node_id = hti.task_def_key_
+        WHERE m.state &lt;&gt; 'SANDBOX' AND hti.end_time_ IS NOT NULL
+        <if test="q.defKey != null and q.defKey != ''">AND pd.def_key = #{q.defKey}</if>
+        <if test="q.startTimeFrom != null">AND hti.start_time_ &gt;= #{q.startTimeFrom}</if>
+        <if test="q.startTimeTo != null">AND hti.start_time_ &lt;= #{q.startTimeTo}</if>
+        GROUP BY pd.def_key, hti.task_def_key_
+        ORDER BY taskCount DESC
+        LIMIT 500
+    </select>
+
+    <select id="selectStatsByApplyDept" resultType="org.jeecg.modules.bpm.monitor.dto.StatsByApplyDeptRow">
+        SELECT m.apply_dept_id AS applyDeptId, COUNT(1) AS instanceCount
+        FROM bpm_instance_meta m
+        WHERE m.state &lt;&gt; 'SANDBOX' AND m.apply_dept_id IS NOT NULL
+        <if test="q.startTimeFrom != null">AND m.start_time &gt;= #{q.startTimeFrom}</if>
+        <if test="q.startTimeTo != null">AND m.start_time &lt;= #{q.startTimeTo}</if>
+        GROUP BY m.apply_dept_id
+        ORDER BY instanceCount DESC
+        LIMIT 100
+    </select>
+
+    <select id="selectStatsByApplyDeptOverTime" resultType="org.jeecg.modules.bpm.monitor.dto.StatsByApplyDeptTrendRow">
+        SELECT m.apply_dept_id AS applyDeptId,
+               DATE_FORMAT(m.start_time, '%Y-%m') AS bucket,
+               COUNT(1) AS instanceCount
+        FROM bpm_instance_meta m
+        WHERE m.state &lt;&gt; 'SANDBOX' AND m.apply_dept_id IS NOT NULL
+        <if test="q.startTimeFrom != null">AND m.start_time &gt;= #{q.startTimeFrom}</if>
+        <if test="q.startTimeTo != null">AND m.start_time &lt;= #{q.startTimeTo}</if>
+        GROUP BY m.apply_dept_id, bucket
+        ORDER BY bucket, instanceCount DESC
+        LIMIT 1000
+    </select>
+
+    <select id="selectOverdueRunningTasks" resultType="org.jeecg.modules.bpm.scheduler.service.OverdueTaskRow">
+        SELECT
+            t.id_           AS taskId,
+            t.proc_inst_id_ AS actInstId,
+            t.task_def_key_ AS nodeId,
+            t.assignee_     AS assignee,
+            t.create_time_  AS createTime,
+            nc.timeout_hours   AS timeoutHours,
+            nc.timeout_action  AS timeoutAction,
+            m.id            AS instMetaId,
+            m.def_id        AS defId
+        FROM act_ru_task t
+        JOIN bpm_instance_meta m ON m.act_inst_id = t.proc_inst_id_
+        JOIN bpm_node_config nc ON nc.def_id = m.def_id AND nc.node_id = t.task_def_key_
+        WHERE m.state = 'RUNNING'
+          AND nc.timeout_hours IS NOT NULL
+          AND TIMESTAMPDIFF(SECOND, t.create_time_, NOW()) &gt; nc.timeout_hours * 3600
+        LIMIT 500
+    </select>
+
+</mapper>
