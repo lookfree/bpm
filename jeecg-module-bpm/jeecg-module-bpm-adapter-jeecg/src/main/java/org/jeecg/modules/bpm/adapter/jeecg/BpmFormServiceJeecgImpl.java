@@ -5,6 +5,7 @@ import org.jeecg.modules.bpm.spi.dto.BpmFormField;
 import org.jeecg.modules.bpm.spi.dto.BpmFormSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.jdbc.core.JdbcOperations;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.*;
@@ -13,9 +14,9 @@ public class BpmFormServiceJeecgImpl implements BpmFormService {
 
     private static final Logger log = LoggerFactory.getLogger(BpmFormServiceJeecgImpl.class);
 
-    private final JdbcTemplate jdbc;
+    private final JdbcOperations jdbc;
 
-    public BpmFormServiceJeecgImpl(JdbcTemplate jdbc) {
+    public BpmFormServiceJeecgImpl(JdbcOperations jdbc) {
         this.jdbc = jdbc;
     }
 

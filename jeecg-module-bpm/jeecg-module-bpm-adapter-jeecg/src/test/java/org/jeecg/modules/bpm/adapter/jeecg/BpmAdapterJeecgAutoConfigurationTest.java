@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabase;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
+import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -17,9 +20,14 @@ class BpmAdapterJeecgAutoConfigurationTest {
 
     @Test
     void registersAllFourSpiBeans() {
+        EmbeddedDatabase db = new EmbeddedDatabaseBuilder()
+                .setType(EmbeddedDatabaseType.H2)
+                .build();
+        JdbcTemplate realJdbc = new JdbcTemplate(db);
+
         new ApplicationContextRunner()
                 .withBean(ISysBaseAPI.class, () -> mock(ISysBaseAPI.class))
-                .withBean(JdbcTemplate.class, () -> mock(JdbcTemplate.class))
+                .withBean(JdbcTemplate.class, () -> realJdbc)
                 .withConfiguration(AutoConfigurations.of(BpmAdapterJeecgAutoConfiguration.class))
                 .run(ctx -> {
                     assertThat(ctx).hasSingleBean(BpmUserContext.class);
@@ -28,5 +36,7 @@ class BpmAdapterJeecgAutoConfigurationTest {
                     assertThat(ctx).hasSingleBean(BpmNotificationSender.class);
                     assertThat(ctx.getBean(BpmUserContext.class)).isInstanceOf(JeecgBpmUserContext.class);
                 });
+
+        db.shutdown();
     }
 }

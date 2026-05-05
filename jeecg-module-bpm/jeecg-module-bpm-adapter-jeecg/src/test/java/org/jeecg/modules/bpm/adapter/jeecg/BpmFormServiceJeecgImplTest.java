@@ -2,7 +2,7 @@ package org.jeecg.modules.bpm.adapter.jeecg;
 
 import org.jeecg.modules.bpm.spi.dto.BpmFormSchema;
 import org.junit.jupiter.api.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.JdbcOperations;
 
 import java.util.*;
 
@@ -12,8 +12,8 @@ import static org.mockito.Mockito.*;
 
 class BpmFormServiceJeecgImplTest {
 
-    JdbcTemplate jdbc = mock(JdbcTemplate.class);
-    BpmFormServiceJeecgImpl svc = new BpmFormServiceJeecgImpl(jdbc);
+    private final JdbcOperations jdbc = mock(JdbcOperations.class);
+    private final BpmFormServiceJeecgImpl svc = new BpmFormServiceJeecgImpl(jdbc);
 
     @Test
     void loadFormSchemaBuildsSchemaFromTables() {
