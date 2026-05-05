@@ -47,17 +47,12 @@
             pd.name              AS defName,
             COUNT(m.id)          AS instanceCount,
             SUM(CASE WHEN m.state = 'COMPLETED' THEN 1 ELSE 0 END) AS completedCount,
-            SUM(CASE WHEN ovd.inst_id IS NOT NULL THEN 1 ELSE 0 END) AS overdueCount,
-            AVG(CASE WHEN m.state = 'COMPLETED' THEN hpi.duration_ ELSE NULL END) AS avgDurationMs
+            0                    AS overdueCount,
+            AVG(CASE WHEN m.state = 'COMPLETED' AND m.end_time IS NOT NULL
+                     THEN TIMESTAMPDIFF(MICROSECOND, m.start_time, m.end_time) / 1000.0
+                     ELSE NULL END) AS avgDurationMs
         FROM bpm_instance_meta m
         LEFT JOIN bpm_process_definition pd ON pd.id = m.def_id
-        LEFT JOIN act_hi_procinst hpi       ON hpi.id_ = m.act_inst_id
-        LEFT JOIN (
-            SELECT DISTINCT hti.proc_inst_id_ AS inst_id
-            FROM act_hi_taskinst hti
-            JOIN bpm_node_config nc ON nc.def_id = hti.proc_def_id_ AND nc.node_id = hti.task_def_key_
-            WHERE hti.duration_ &gt; nc.timeout_hours * 3600 * 1000
-        ) ovd ON ovd.inst_id = m.act_inst_id
         WHERE m.state &lt;&gt; 'SANDBOX'
         <if test="q.defKey != null and q.defKey != ''">AND pd.def_key = #{q.defKey}</if>
         <if test="q.startTimeFrom != null">AND m.start_time &gt;= #{q.startTimeFrom}</if>
