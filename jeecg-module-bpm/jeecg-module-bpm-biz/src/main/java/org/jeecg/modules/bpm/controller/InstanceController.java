@@ -1,10 +1,10 @@
 package org.jeecg.modules.bpm.controller;
 
+import org.jeecg.modules.bpm.common.BpmResult;
 import org.jeecg.modules.bpm.domain.entity.InstanceMeta;
 import org.jeecg.modules.bpm.service.instance.InstanceService;
 import org.jeecg.modules.bpm.service.instance.StartRequest;
 import org.jeecg.modules.bpm.service.instance.StartResponse;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,14 +18,23 @@ public class InstanceController {
     }
 
     @PostMapping
-    public ResponseEntity<StartResponse> start(@RequestBody StartRequest req) {
-        return ResponseEntity.ok(service.start(req));
+    public BpmResult<StartResponse> start(@RequestBody StartRequest req) {
+        return BpmResult.ok(service.start(req));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<InstanceMeta> get(@PathVariable String id) {
+    public BpmResult<InstanceMeta> get(@PathVariable String id) {
         InstanceMeta meta = service.getById(id);
-        if (meta == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(meta);
+        return meta == null ? BpmResult.error("实例不存在") : BpmResult.ok(meta);
+    }
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public BpmResult<String> onNotFound(IllegalArgumentException e) {
+        return BpmResult.error(e.getMessage());
+    }
+
+    @ExceptionHandler(Exception.class)
+    public BpmResult<String> onError(Exception e) {
+        return BpmResult.error(e.getMessage());
     }
 }

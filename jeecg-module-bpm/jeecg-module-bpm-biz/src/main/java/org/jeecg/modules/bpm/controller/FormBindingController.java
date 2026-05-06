@@ -1,8 +1,8 @@
 package org.jeecg.modules.bpm.controller;
 
+import org.jeecg.modules.bpm.common.BpmResult;
 import org.jeecg.modules.bpm.domain.entity.FormBinding;
 import org.jeecg.modules.bpm.service.form.FormBindingService;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,19 +19,19 @@ public class FormBindingController {
     }
 
     @PostMapping
-    public ResponseEntity<Map<String, String>> bind(@RequestBody Map<String, String> body) {
+    public BpmResult<Map<String, String>> bind(@RequestBody Map<String, String> body) {
         String id = service.bind(body.get("defId"), body.get("formId"), body.get("purpose"));
-        return ResponseEntity.ok(Map.of("id", id));
+        return BpmResult.ok(Map.of("id", id));
     }
 
     @GetMapping
-    public ResponseEntity<List<FormBinding>> list(@RequestParam String defId) {
-        return ResponseEntity.ok(service.listByDef(defId));
+    public BpmResult<List<FormBinding>> list(@RequestParam String defId) {
+        return BpmResult.ok(service.listByDef(defId));
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> unbind(@PathVariable String id) {
+    public BpmResult<Void> unbind(@PathVariable String id) {
         service.unbind(id);
-        return ResponseEntity.noContent().build();
+        return BpmResult.ok();
     }
 }

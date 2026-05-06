@@ -14,7 +14,7 @@ mybatis-plus:
       logic-delete-field: deleted
       logic-delete-value: 1
       logic-not-delete-value: 0
-  mapper-locations: classpath*:mapper/**/*.xml
+  mapper-locations: classpath*:org/jeecg/modules/**/xml/*Mapper.xml,classpath*:mapper/**/*.xml
 
 bpm:
   schema:
