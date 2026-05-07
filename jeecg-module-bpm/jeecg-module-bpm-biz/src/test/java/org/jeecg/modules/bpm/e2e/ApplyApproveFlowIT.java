@@ -138,12 +138,12 @@ class ApplyApproveFlowIT {
 
         // 8. As user 42L: verify todo list has approve task
         when(userContext.currentUserId()).thenReturn(42L);
-        List<Task> todos = bpmTaskService.listTodo();
+        List<Map<String, Object>> todos = bpmTaskService.listTodo();
         assertThat(todos).hasSize(1);
-        assertThat(todos.get(0).getTaskDefinitionKey()).isEqualTo("approve");
+        assertThat(todos.get(0).get("taskDefKey")).isEqualTo("approve");
 
         // 9. Approve
-        bpmTaskService.complete(todos.get(0).getId(), "APPROVE", "同意", Map.of());
+        bpmTaskService.complete((String) todos.get(0).get("taskId"), "APPROVE", "同意", Map.of());
 
         // 10. Verify: no more active tasks
         long remaining = flowableTaskService.createTaskQuery()

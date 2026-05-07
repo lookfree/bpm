@@ -37,6 +37,10 @@ public class InstanceService {
     public StartResponse start(StartRequest req) {
         BpmProcessDefinition def = definitionMapper.selectById(req.getDefId());
         if (def == null) throw new IllegalArgumentException("definition not found: " + req.getDefId());
+        if (!"PUBLISHED".equals(def.getState()))
+            throw new IllegalStateException("只有已发布的流程才能发起");
+        if (def.getActDefId() == null || def.getActDefId().isEmpty())
+            throw new IllegalStateException("流程尚未部署到引擎，请重新发布");
 
         String businessKey = formService.saveFormSubmission(req.getFormId(), req.getFormData());
 
@@ -44,12 +48,13 @@ public class InstanceService {
         Long applyDeptId = userContext.currentDeptId();
 
         Map<String, Object> vars = new HashMap<>();
-        vars.put("formData", req.getFormData());
+        vars.put("formData", req.getFormData() != null ? req.getFormData() : new HashMap<>());
         vars.put("applyUserId", applyUserId);
         vars.put("applyDeptId", applyDeptId);
 
-        ProcessInstance pi = runtimeService.startProcessInstanceByKey(
-                def.getDefKey(), businessKey, vars);
+        // Use actDefId (exact deployed process definition ID) instead of defKey
+        ProcessInstance pi = runtimeService.startProcessInstanceById(
+                def.getActDefId(), businessKey, vars);
 
         InstanceMeta meta = new InstanceMeta();
         meta.setActInstId(pi.getId());

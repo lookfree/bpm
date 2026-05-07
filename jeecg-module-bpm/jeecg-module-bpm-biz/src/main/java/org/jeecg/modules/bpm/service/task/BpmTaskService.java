@@ -3,7 +3,6 @@ package org.jeecg.modules.bpm.service.task;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.flowable.engine.HistoryService;
 import org.flowable.task.api.Task;
-import org.flowable.task.api.history.HistoricTaskInstance;
 import org.jeecg.modules.bpm.domain.entity.FormBinding;
 import org.jeecg.modules.bpm.domain.entity.InstanceMeta;
 import org.jeecg.modules.bpm.mapper.FormBindingMapper;
@@ -16,6 +15,7 @@ import org.jeecg.modules.bpm.spi.dto.BpmFormSchema;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.LinkedHashMap;
 
 @Service
 public class BpmTaskService {
@@ -46,21 +46,60 @@ public class BpmTaskService {
         this.formService = formService;
     }
 
-    public List<Task> listTodo() {
+    public List<Map<String, Object>> listTodo() {
         String userId = String.valueOf(userContext.currentUserId());
-        return flowableTaskService.createTaskQuery()
+        List<Task> tasks = flowableTaskService.createTaskQuery()
                 .taskCandidateOrAssigned(userId)
+                .includeProcessVariables()
                 .orderByTaskCreateTime().desc()
                 .list();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Task t : tasks) {
+            InstanceMeta meta = instanceMetaMapper.selectOne(
+                    new LambdaQueryWrapper<InstanceMeta>()
+                            .eq(InstanceMeta::getActInstId, t.getProcessInstanceId()));
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("taskId", t.getId());
+            m.put("taskName", t.getName());
+            m.put("taskDefKey", t.getTaskDefinitionKey());
+            m.put("assignee", t.getAssignee());
+            m.put("createTime", t.getCreateTime());
+            m.put("processInstanceId", t.getProcessInstanceId());
+            m.put("instanceId", meta != null ? meta.getId() : null);
+            m.put("defId", meta != null ? meta.getDefId() : null);
+            m.put("businessKey", meta != null ? meta.getBusinessKey() : null);
+            m.put("instanceState", meta != null ? meta.getState() : null);
+            result.add(m);
+        }
+        return result;
     }
 
-    public List<HistoricTaskInstance> listDone() {
+    public List<Map<String, Object>> listDone() {
         String userId = String.valueOf(userContext.currentUserId());
-        return historyService.createHistoricTaskInstanceQuery()
+        List<org.flowable.task.api.history.HistoricTaskInstance> tasks = historyService.createHistoricTaskInstanceQuery()
                 .taskAssignee(userId)
                 .finished()
                 .orderByHistoricTaskInstanceEndTime().desc()
                 .list();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (org.flowable.task.api.history.HistoricTaskInstance t : tasks) {
+            InstanceMeta meta = instanceMetaMapper.selectOne(
+                    new LambdaQueryWrapper<InstanceMeta>()
+                            .eq(InstanceMeta::getActInstId, t.getProcessInstanceId()));
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("taskId", t.getId());
+            m.put("taskName", t.getName());
+            m.put("taskDefKey", t.getTaskDefinitionKey());
+            m.put("assignee", t.getAssignee());
+            m.put("createTime", t.getCreateTime());
+            m.put("endTime", t.getEndTime());
+            m.put("processInstanceId", t.getProcessInstanceId());
+            m.put("instanceId", meta != null ? meta.getId() : null);
+            m.put("defId", meta != null ? meta.getDefId() : null);
+            m.put("businessKey", meta != null ? meta.getBusinessKey() : null);
+            result.add(m);
+        }
+        return result;
     }
 
     public void complete(String taskId, String action, String comment, Map<String, Object> formData) {
